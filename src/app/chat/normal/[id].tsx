@@ -46,7 +46,448 @@ import VoicePlayer from "@src/components/chat_components/VoicePlayer";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { Message, useChat } from "@src/hooks/useChat";
 import useThemeColor from "@src/hooks/useThemeColor";
-import { formatDuration, parseContent } from "@src/utils/chatUtils";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDuration(sec: number) {
+  const m = Math.floor(sec / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = Math.floor(sec % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function parseContent(raw: any): { type: string; [k: string]: any } {
+  if (!raw) return { type: "text", text: "" };
+  if (typeof raw === "string") {
+    try {
+      const p = JSON.parse(raw);
+      if (p && typeof p === "object") return p;
+    } catch {}
+    return { type: "text", text: raw };
+  }
+  return typeof raw === "object" ? raw : { type: "text", text: String(raw) };
+}
+
+// ─── Voice Player ─────────────────────────────────────────────────────────────
+
+function VoicePlayer({
+  url,
+  duration,
+  isMe,
+}: {
+  url: string;
+  duration?: number;
+  isMe: boolean;
+}) {
+  const { t } = useTranslation();
+  const themeColors = useThemeColor();
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(
+    () => () => {
+      sound?.unloadAsync();
+    },
+    [sound],
+  );
+
+  const toggle = async () => {
+    try {
+      if (playing && sound) {
+        await sound.pauseAsync();
+        setPlaying(false);
+        return;
+      }
+      if (sound) {
+        await sound.playAsync();
+        setPlaying(true);
+        return;
+      }
+      const { sound: s } = await Audio.Sound.createAsync(
+        { uri: url },
+        { shouldPlay: true },
+      );
+      setSound(s);
+      setPlaying(true);
+      s.setOnPlaybackStatusUpdate((st: any) => {
+        if (st.isLoaded) {
+          setProgress(st.positionMillis / (st.durationMillis || 1));
+          if (st.didJustFinish) {
+            setPlaying(false);
+            setProgress(0);
+          }
+        }
+      });
+    } catch (e) {
+      console.error("Voice error:", e);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={toggle}
+      style={styles.voiceRow}
+      activeOpacity={0.8}
+    >
+      {/* ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary */}
+      <View
+        style={[
+          styles.voiceBtn,
+          {
+            backgroundColor: isMe
+              ? "rgba(255,255,255,0.25)"
+              : themeColors.primary,
+          },
+        ]}
+      >
+        {playing ? (
+          <StopIcon size={13} color="#fff" weight="fill" />
+        ) : (
+          <MicrophoneIcon size={13} color="#fff" weight="fill" />
+        )}
+      </View>
+      {/* ✅ Was hardcoded "#E5E7EB" — now uses themeColors.border */}
+      <View
+        style={[
+          styles.voiceTrack,
+          {
+            backgroundColor: isMe
+              ? "rgba(255,255,255,0.3)"
+              : themeColors.border,
+          },
+        ]}
+      >
+        {/* ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary */}
+        <View
+          style={[
+            styles.voiceFill,
+            {
+              width: `${progress * 100}%`,
+              backgroundColor: isMe ? "#fff" : themeColors.primary,
+            },
+          ]}
+        />
+      </View>
+      {/* ✅ Was hardcoded "#6B7280" — now uses themeColors.tabIconDefault */}
+      <ThemedText
+        style={{
+          color: isMe ? "#fff" : themeColors.tabIconDefault,
+          fontSize: 12,
+          minWidth: 34,
+        }}
+      >
+        {formatDuration(duration || 0)}
+      </ThemedText>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Message Bubble ───────────────────────────────────────────────────────────
+
+function Bubble({
+  item,
+  isMe,
+  themeColors,
+  isOptimistic,
+  isLastFromMe,
+  isRead,
+  onLongPress,
+}: {
+  item: Message;
+  isMe: boolean;
+  themeColors: any;
+  isOptimistic: boolean;
+  isLastFromMe: boolean;
+  isRead: boolean;
+  onLongPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const content = parseContent(item.content);
+  // ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary
+  const bubbleBg = isMe ? themeColors.primary : themeColors.card;
+  const textColor = isMe ? "#fff" : themeColors.text;
+
+  const inner = () => {
+    switch (content.type) {
+      case "image":
+        return (
+          <Image
+            source={{ uri: content.url }}
+            style={styles.imgMsg}
+            resizeMode="cover"
+          />
+        );
+
+      case "location":
+        return (
+          <TouchableOpacity
+            style={styles.locRow}
+            onPress={() => {
+              const u = Platform.select({
+                ios: `maps:?q=${content.label || "Location"}&ll=${content.latitude},${content.longitude}`,
+                android: `geo:${content.latitude},${content.longitude}?q=${content.label || "Location"}`,
+              });
+              if (u) Linking.openURL(u);
+            }}
+          >
+            {/* ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary */}
+            <MapPinIcon
+              size={18}
+              color={isMe ? "#fff" : themeColors.primary}
+              weight="fill"
+            />
+            <ThemedText
+              style={{ color: textColor, fontSize: 14, marginLeft: 6, flex: 1 }}
+              numberOfLines={2}
+            >
+              {content.label ||
+                `${Number(content.latitude).toFixed(4)}, ${Number(content.longitude).toFixed(4)}`}
+            </ThemedText>
+          </TouchableOpacity>
+        );
+
+      case "voice":
+        return (
+          <VoicePlayer
+            url={content.url}
+            duration={content.duration}
+            isMe={isMe}
+          />
+        );
+
+      default: {
+        const text =
+          content.text ||
+          content.message ||
+          (typeof item.content === "string" ? item.content : "");
+        return (
+          <ThemedText
+            style={{ color: textColor, fontSize: 15, lineHeight: 22 }}
+          >
+            {text}
+          </ThemedText>
+        );
+      }
+    }
+  };
+
+  return (
+    <View
+      style={[
+        styles.msgWrap,
+        isMe ? styles.myWrap : styles.otherWrap,
+        isOptimistic && { opacity: 0.6 },
+      ]}
+    >
+      <Pressable
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        style={[
+          styles.bubble,
+          isMe ? styles.myBubble : styles.otherBubble,
+          { backgroundColor: bubbleBg },
+          content.type === "image" && styles.imgBubble,
+        ]}
+      >
+        {inner()}
+      </Pressable>
+      <View style={styles.metaRow}>
+        <ThemedText
+          style={[styles.msgTime, { color: themeColors.text + "55" }]}
+        >
+          {isOptimistic
+            ? t("chat.sending")
+            : new Date(item.created_at || "").toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+        </ThemedText>
+        {isMe && isLastFromMe && (
+          <View style={{ marginLeft: 4 }}>
+            {/* ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary */}
+            {isRead ? (
+              <ChecksIcon size={14} color={themeColors.primary} weight="bold" />
+            ) : (
+              <CheckIcon
+                size={14}
+                color={themeColors.text + "55"}
+                weight="bold"
+              />
+            )}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─── Product Card ─────────────────────────────────────────────────────────────
+
+function ProductCard({
+  title,
+  thumbnail,
+  price,
+  currency,
+  themeColors,
+  onPress,
+}: {
+  title?: string;
+  thumbnail?: string;
+  price?: string;
+  currency?: string;
+  themeColors: any;
+  onPress?: () => void;
+}) {
+  const { t } = useTranslation();
+  const [collapsed, setCollapsed] = useState(false);
+  if (!title) return null;
+  const hasPrice = price && price !== "0" && price !== "";
+
+  if (collapsed) {
+    return (
+      <TouchableOpacity
+        onPress={() => setCollapsed(false)}
+        activeOpacity={0.8}
+        style={[
+          styles.cardPill,
+          {
+            backgroundColor: themeColors.card,
+            borderColor: themeColors.border + "40",
+          },
+        ]}
+      >
+        {thumbnail ? (
+          <Image source={{ uri: thumbnail }} style={styles.pillThumb} />
+        ) : (
+          // ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary
+          <ShoppingBagIcon
+            size={14}
+            color={themeColors.primary}
+            weight="fill"
+          />
+        )}
+        <ThemedText
+          style={[styles.pillTitle, { color: themeColors.text }]}
+          numberOfLines={1}
+        >
+          {title}
+        </ThemedText>
+        {hasPrice && (
+          // ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary
+          <ThemedText
+            style={[styles.pillPrice, { color: themeColors.primary }]}
+          >
+            {currency || "$"} {price}
+          </ThemedText>
+        )}
+        <CaretLeftIcon
+          size={14}
+          color={themeColors.text + "60"}
+          weight="bold"
+        />
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.productCard,
+        {
+          backgroundColor: themeColors.card,
+          borderBottomColor: themeColors.border + "25",
+        },
+      ]}
+    >
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.9}
+        style={styles.cardImageWrap}
+      >
+        {thumbnail ? (
+          <Image
+            source={{ uri: thumbnail }}
+            style={styles.cardImage}
+            resizeMode="cover"
+          />
+        ) : (
+          // ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary
+          <View
+            style={[
+              styles.cardImagePlaceholder,
+              { backgroundColor: themeColors.primary + "15" },
+            ]}
+          >
+            <ShoppingBagIcon
+              size={44}
+              color={themeColors.primary}
+              weight="fill"
+            />
+          </View>
+        )}
+        <View style={styles.cardBadge}>
+          <ShoppingBagIcon size={11} color="#fff" weight="fill" />
+          <ThemedText style={styles.cardBadgeText}>
+            {t("chat.listing")}
+          </ThemedText>
+        </View>
+        <TouchableOpacity
+          onPress={() => setCollapsed(true)}
+          style={styles.cardCollapseBtn}
+          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+        >
+          <CaretLeftIcon
+            size={13}
+            color="#fff"
+            weight="bold"
+            style={{ transform: [{ rotate: "90deg" }] }}
+          />
+        </TouchableOpacity>
+      </TouchableOpacity>
+      <View style={styles.cardInfo}>
+        <View style={{ flex: 1 }}>
+          <ThemedText
+            style={[styles.cardTitle, { color: themeColors.text }]}
+            numberOfLines={2}
+          >
+            {title}
+          </ThemedText>
+          {hasPrice && (
+            // ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary
+            <View
+              style={[
+                styles.cardPricePill,
+                { backgroundColor: themeColors.primary + "18" },
+              ]}
+            >
+              <ThemedText
+                style={[styles.cardPriceText, { color: themeColors.primary }]}
+              >
+                {currency || "USD"} {Number(price).toLocaleString()}
+              </ThemedText>
+            </View>
+          )}
+        </View>
+        {/* ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary */}
+        <TouchableOpacity
+          onPress={onPress}
+          style={[styles.cardViewBtn, { backgroundColor: themeColors.primary }]}
+          activeOpacity={0.85}
+        >
+          <ThemedText style={styles.cardViewBtnText}>
+            {t("chat.view_listing")}
+          </ThemedText>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function NormalProductChatScreen() {
   const params = useLocalSearchParams();
@@ -233,14 +674,24 @@ export default function NormalProductChatScreen() {
         },
       );
     } else {
-      Alert.alert(title, confirmationMessage, [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("chat.delete_for_you"),
-          style: "destructive",
-          onPress: performDelete,
-        },
-      ]);
+      Alert.alert(
+        t("chat.delete_conversation_title"),
+        t("chat.delete_conversation_confirmation"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.delete"),
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await deleteMessage(msg.id);
+              } catch (e: any) {
+                Alert.alert(t("error"), e.message);
+              }
+            },
+          },
+        ],
+      );
     }
   };
 
@@ -365,6 +816,7 @@ export default function NormalProductChatScreen() {
       await sendMessage({ type: "voice", url, duration: dur });
     } catch (e: any) {
       Alert.alert(t("error"), e.message || "Could not send voice message.");
+      Alert.alert(t("error"), e.message || "Could not send voice message.");
     } finally {
       setIsSending(false);
     }
@@ -391,6 +843,9 @@ export default function NormalProductChatScreen() {
       t("chat.block_user_confirmation", {
         userName: otherUser?.first_name || "this user",
       }),
+      t("chat.block_user_confirmation", {
+        userName: otherUser?.first_name || "this user",
+      }),
       [
         { text: t("common.cancel"), style: "cancel" },
         {
@@ -399,6 +854,7 @@ export default function NormalProductChatScreen() {
           onPress: async () => {
             try {
               await blockUser(otherUser?.id || "");
+              Alert.alert(t("chat.block"), t("chat.user_blocked_successfully"));
               Alert.alert(t("chat.block"), t("chat.user_blocked_successfully"));
               router.back();
             } catch (e: any) {
@@ -600,7 +1056,8 @@ export default function NormalProductChatScreen() {
       <View
         style={[styles.centered, { backgroundColor: themeColors.background }]}
       >
-        <ActivityIndicator size="large" color={themeColors.primary} />
+        {/* ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary */}
+        <ActivityIndicator size="small" color={themeColors.primary} />
       </View>
     );
   }
@@ -664,6 +1121,11 @@ export default function NormalProductChatScreen() {
                 color: otherUserOnline ? "#10B981" : themeColors.text + "50",
               }}
             >
+              {otherUserOnline
+                ? t("chat.active_now")
+                : isMuted
+                  ? t("chat.muted")
+                  : t("chat.offline")}
               {otherUserOnline
                 ? t("chat.active_now")
                 : isMuted
@@ -965,13 +1427,88 @@ export default function NormalProductChatScreen() {
       />
       <ChatOptionsSheet
         visible={showOptionsMenu}
-        onClose={() => setShowOptionsMenu(false)}
-        onMute={handleToggleMute}
-        onBlock={handleBlock}
-        isMuted={isMuted}
-        themeColors={themeColors}
-        otherUserName={otherUser?.first_name || "User"}
-      />
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowOptionsMenu(false)}
+      >
+        <Pressable
+          style={styles.overlay}
+          onPress={() => setShowOptionsMenu(false)}
+        >
+          <View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: themeColors.card,
+                // ✅ Clears home indicator on iPhone
+                paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 40,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.sheetHandle,
+                { backgroundColor: themeColors.border },
+              ]}
+            />
+            <ThemedText style={styles.sheetTitle}>
+              {t("chat.options")}
+            </ThemedText>
+
+            <TouchableOpacity style={styles.optRow} onPress={handleToggleMute}>
+              {isMuted ? (
+                <BellIcon size={22} color={themeColors.text} weight="fill" />
+              ) : (
+                <BellSlashIcon
+                  size={22}
+                  color={themeColors.text}
+                  weight="fill"
+                />
+              )}
+              <ThemedText
+                style={[styles.optLabel, { color: themeColors.text }]}
+              >
+                {isMuted
+                  ? t("chat.unmute_notifications")
+                  : t("chat.mute_notifications")}
+              </ThemedText>
+            </TouchableOpacity>
+
+            <View
+              style={[
+                styles.divider,
+                { backgroundColor: themeColors.border + "40" },
+              ]}
+            />
+
+            <TouchableOpacity style={styles.optRow} onPress={handleBlock}>
+              {/* "#EF4444" kept intentional — semantic destructive color */}
+              <ProhibitIcon size={22} color="#EF4444" weight="fill" />
+              <ThemedText style={[styles.optLabel, { color: "#EF4444" }]}>
+                {t("chat.block")} {otherUser?.first_name || "User"}
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.cancelBtn,
+                { borderColor: themeColors.border + "60" },
+              ]}
+              onPress={() => setShowOptionsMenu(false)}
+            >
+              <ThemedText
+                style={{
+                  fontWeight: "700",
+                  fontSize: 16,
+                  color: themeColors.text,
+                }}
+              >
+                {t("common.cancel")}
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

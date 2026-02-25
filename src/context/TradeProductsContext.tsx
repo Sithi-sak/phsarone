@@ -1,88 +1,137 @@
+import { supabase } from "@src/lib/supabase";
 import { TradeProduct } from "@src/types/productTypes";
-import React, { createContext, ReactNode, useContext, useState } from "react";
+import { Database } from "@src/types/supabase";
+import React, {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+
+type TradeRow = Database["public"]["Tables"]["trades"]["Row"];
 
 interface TradeProductsContextType {
   products: TradeProduct[];
+  loading: boolean;
   addProduct: (product: TradeProduct) => void;
+  refreshProducts: () => Promise<void>;
   getProductById: (id: string) => TradeProduct | undefined;
 }
 
-const DUMMY_TRADE_PRODUCTS: TradeProduct[] = [
-  {
-    id: "1",
-    images: [
-      "https://imgs.search.brave.com/07oXKYCqhykLHDwPsPykawJShCdtRurhPlY_xoxthXs/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9tZWRp/YS5nZXR0eWltYWdl/cy5jb20vaWQvMTM1/ODM4NjI1Mi9waG90/by9hcHBsZS1tYWNi/b29rLXByby5qcGc_/cz02MTJ4NjEyJnc9/MCZrPTIwJmM9QlZS/WTNjSWN6VEExUVJQ/YUxmcXlYd3lFUjha/R1AyVE81QjR1OV9S/c3lLWT0",
-    ],
-    title: "MacBook Pro M1",
-    seller: "Sarah Chen",
-    timeAgo: { value: 2, unit: "hours" },
-    lookingFor: [
-      {
-        name: "Gaming Laptop ROG Zephyrus ",
-        description:
-          "Preferably with RTX 3060 or higher GPU, 16GB+ RAM, good cooling system",
-      },
-    ],
-    condition: "good",
-    originalPrice: 1299,
-    province: "phnomPenh",
-    district: "Sen Sok",
-    commune: "Phnom Penh Thmey",
-    coordinates: {
-      latitude: 11.5676,
-      longitude: 104.8908,
-    },
-    description:
-      "MacBook Pro 2020, 16GB RAM, 512GB SSD. Perfect condition, always used with case.",
-    telephone: "012#### / 010####",
-    estimatedTradeValueRange: "$1,200 - $1,500",
-    owner: {
-      name: "Sarah Chen",
-      isVerified: true,
-      avatar:
-        "https://imgs.search.brave.com/07oXKYCqhykLHDwPsPykawJShCdtRurhPlY_xoxthXs/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9tZWRp/YS5nZXR0eWltYWdl/cy5jb20vaWQvMTM1/ODM4NjI1Mi9waG90/by9hcHBsZS1tYWNi/b29rLXByby5qcGc_/cz02MTJ4NjEyJnc9/MCZrPTIwJmM9QlZS/WTNjSWN6VEExUVJQ/YUxmcXlYd3lFUjha/R1AyVE81QjR1OV9S/c3lLWT0",
-    },
-    postedDate: "2024-02-09T10:00:00Z",
-  },
-  {
-    id: "2",
-    images: [
-      "https://imgs.search.brave.com/07oXKYCqhykLHDwPsPykawJShCdtRurhPlY_xoxthXs/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9tZWRp/YS5nZXR0eWltYWdl/cy5jb20vaWQvMTM1/ODM4NjI1Mi9waG90/by9hcHBsZS1tYWNi/b29rLXByby5qcGc_/cz=612x612&w=0&k=20&c=BVRY3cIczTA1QRPAhflqyXwyES8ZGP2TO5B4u9_RsyKY=",
-    ],
-    title: "Steam Deck",
-    seller: "By Lina",
-    timeAgo: { value: 2, unit: "hours" },
-    lookingFor: [{ name: "Handheld Gaming Device " }],
-    condition: "good",
-    originalPrice: 399,
-    province: "phnomPenh",
-    district: "Mean Chey",
-    commune: "Chak Angre Leu",
-    coordinates: {
-      latitude: 11.5204,
-      longitude: 104.9189,
-    },
-    description:
-      "Steam Deck 512GB, great condition, comes with case and charger.",
-    telephone: "015#### / 077####",
-    estimatedTradeValueRange: "$350 - $450",
-    owner: {
-      name: "Lina",
-      isVerified: false,
-      avatar:
-        "https://imgs.search.brave.com/07oXKYCqhykLHDwPsPykawJShCdtRurhPlY_xoxthXs/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9tZWRp/YS5nZXR0eWltYWdl/cy5jb20vaWQvMTM1/ODM4NjI1Mi9waG90/by9hcHBsZS1tYWNi/b29rLXByby5qcGc_/cz02MTJ4NjEyJnc9/MCZrPTIwJmM9QlZS/WTNjSWN6VEExUVJQ/YUxmcXlYd3lFUjha/R1AyVE81QjR1OV9S//c3lLWT0",
-    },
-    postedDate: "2024-02-10T14:30:00Z",
-  },
-];
+const DEFAULT_COORDINATES = {
+  latitude: 11.5564,
+  longitude: 104.9282,
+};
 
 const TradeProductsContext = createContext<
   TradeProductsContextType | undefined
 >(undefined);
 
+const getTimeAgo = (
+  postedDate: string | null,
+): TradeProduct["timeAgo"] => {
+  const now = Date.now();
+  const posted = postedDate ? new Date(postedDate).getTime() : now;
+  const diffMinutes = Math.max(0, Math.floor((now - posted) / 60000));
+
+  if (diffMinutes < 60) {
+    return { value: diffMinutes, unit: "minutes" };
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return { value: diffHours, unit: "hours" };
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) {
+    return { value: diffDays, unit: "days" };
+  }
+
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffWeeks < 4) {
+    return { value: diffWeeks, unit: "weeks" };
+  }
+
+  return { value: Math.max(1, Math.floor(diffDays / 30)), unit: "months" };
+};
+
+const mapTradeRowToTradeProduct = (row: TradeRow): TradeProduct => {
+  const metadata = (row.metadata as Record<string, any> | null) ?? {};
+
+  const coordinates = metadata.coordinates;
+  const normalizedCoordinates =
+    coordinates &&
+    typeof coordinates.latitude === "number" &&
+    typeof coordinates.longitude === "number"
+      ? coordinates
+      : DEFAULT_COORDINATES;
+
+  const lookingForName =
+    (row.looking_for && row.looking_for.trim()) ||
+    metadata.lookingForName ||
+    "";
+
+  return {
+    id: row.id,
+    images: row.images ?? [],
+    title: row.title,
+    seller: metadata.sellerName || metadata.owner?.name || row.owner_id,
+    timeAgo: getTimeAgo(row.created_at),
+    lookingFor: [
+      {
+        name: lookingForName,
+        description: metadata.lookingForDescription || undefined,
+      },
+    ],
+    condition: metadata.condition || "good",
+    originalPrice: Number(metadata.originalPrice ?? 0),
+    province: metadata.province || row.location_name || "phnomPenh",
+    district: metadata.district || "",
+    commune: metadata.commune || "",
+    coordinates: normalizedCoordinates,
+    description: row.description || "",
+    telephone: metadata.telephone || "",
+    estimatedTradeValueRange: metadata.estimatedTradeValueRange || "",
+    owner: metadata.owner || {
+      name: metadata.sellerName || row.owner_id,
+      isVerified: false,
+      avatar: "",
+    },
+    postedDate: row.created_at || undefined,
+  };
+};
+
 export function TradeProductsProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] =
-    useState<TradeProduct[]>(DUMMY_TRADE_PRODUCTS);
+  const [products, setProducts] = useState<TradeProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refreshProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("trades")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setProducts((data ?? []).map(mapTradeRowToTradeProduct));
+    } catch (error) {
+      console.error("Failed to fetch trades:", error);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshProducts();
+  }, [refreshProducts]);
 
   const addProduct = (product: TradeProduct) => {
     setProducts((prev) => [product, ...prev]);
@@ -94,7 +143,7 @@ export function TradeProductsProvider({ children }: { children: ReactNode }) {
 
   return (
     <TradeProductsContext.Provider
-      value={{ products, addProduct, getProductById }}
+      value={{ products, loading, addProduct, refreshProducts, getProductById }}
     >
       {children}
     </TradeProductsContext.Provider>

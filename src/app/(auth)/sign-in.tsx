@@ -1,4 +1,4 @@
-import { useSignIn } from '@clerk/clerk-expo'
+import { useSignIn, useAuth } from '@clerk/clerk-expo'
 import { useRouter } from 'expo-router'
 import React from 'react'
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function SignInPage() {
   const { signIn, setActive, isLoaded } = useSignIn()
+  const { signOut, isSignedIn } = useAuth()
   const router = useRouter()
 
   const [emailAddress, setEmailAddress] = React.useState('')
@@ -16,11 +17,25 @@ export default function SignInPage() {
   const onSignInPress = async () => {
     if (!isLoaded) return
 
+    if (!emailAddress || !password) {
+      console.error('Email and password are required')
+      return
+    }
+
     try {
+      console.log('Attempting sign in for:', emailAddress)
+
+      if (isSignedIn) {
+        console.log('User already signed in, signing out first...')
+        await signOut()
+      }
+
       const signInAttempt = await signIn.create({
         identifier: emailAddress,
         password,
       })
+
+      console.log('Sign in attempt status:', signInAttempt.status)
 
       if (signInAttempt.status === 'complete') {
         await setActive({ session: signInAttempt.createdSessionId })
@@ -31,10 +46,22 @@ export default function SignInPage() {
         })
         setPendingVerification(true)
       } else {
+        console.error('Unexpected sign in status:', signInAttempt.status)
         console.error(JSON.stringify(signInAttempt, null, 2))
       }
-    } catch (err) {
-      console.error(JSON.stringify(err, null, 2))
+    } catch (err: any) {
+      console.error('Sign in error:', JSON.stringify(err, null, 2))
+      
+      // Check for existing session error which might happen even if isSignedIn was false
+      if (err.errors && err.errors.some((e: any) => e.code === 'session_exists')) {
+        console.log('Session exists error caught, signing out...')
+        await signOut()
+        alert('An active session was found. We have cleared it, please try signing in again.')
+      } else if (err.errors) {
+        err.errors.forEach((e: any) => {
+          console.error('Error detail:', e.message, '-', e.longMessage)
+        })
+      }
     }
   }
 

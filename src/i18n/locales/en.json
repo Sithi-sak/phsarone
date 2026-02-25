@@ -482,6 +482,8 @@
     "trade_preferences": "Trade Preferences",
     "trade_preferences_description": "The owner is interested in trading for the following items:",
     "estimated_trade_value_range_label": "$ Estimated Trade Value Range",
+    "chat_with_owner": "Chat with Owner",
+    "owner_information": "Owner Information",
     "send_trade_offer": "Send Trade Offer",
     "trade_tip": "Tip: Chat with the owner first to confirm details before sending a trade offer.",
     "add_new_product": "Add New Trade Product",

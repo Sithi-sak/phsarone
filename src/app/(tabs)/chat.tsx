@@ -198,7 +198,7 @@ export default function ChatScreen() {
 
       {loading && !conversations.length ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={themeColors.tint} />
+          <ActivityIndicator size="small" color={themeColors.tint} />
         </View>
       ) : (
         <FlatList

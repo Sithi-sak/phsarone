@@ -1,5 +1,7 @@
 import ThemedStatusBar from "@/src/components/shared_components/ThemedStatusBar";
 import SellDraftProvider from "@/src/context/SellDraftContext";
+import TradeProductsProvider from "@/src/context/TradeProductsContext";
+import TradeDraftProvider from "@/src/context/TradeDraftContext";
 import { ThemeProvider } from "@/src/context/ThemeContext";
 import i18n from "@/src/i18n";
 import { ClerkProvider } from "@clerk/clerk-expo";
@@ -55,15 +57,19 @@ export default function RootLayout() {
       <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
         <ThemeProvider>
           <I18nextProvider i18n={i18n}>
-            <SellDraftProvider>
-              <ThemedStatusBar />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="sell" />
-                <Stack.Screen name="settings" />
-              </Stack>
-            </SellDraftProvider>
+            <TradeProductsProvider>
+              <TradeDraftProvider>
+                <SellDraftProvider>
+                  <ThemedStatusBar />
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="sell" />
+                    <Stack.Screen name="settings" />
+                  </Stack>
+                </SellDraftProvider>
+              </TradeDraftProvider>
+            </TradeProductsProvider>
           </I18nextProvider>
         </ThemeProvider>
       </ClerkProvider>

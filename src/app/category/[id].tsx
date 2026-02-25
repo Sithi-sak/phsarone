@@ -40,8 +40,12 @@ export default function CategorySearchScreen() {
   const [subCategories, setSubCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-    const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string | null>(null);
-    const [selectedSubCategoryName, setSelectedSubCategoryName] = useState<string | null>(null);
+  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<
+    string | null
+  >(null);
+  const [selectedSubCategoryName, setSelectedSubCategoryName] = useState<
+    string | null
+  >(null);
 
   const fetchSubCategories = useCallback(async () => {
     if (!mainCategoryId) return;
@@ -69,18 +73,20 @@ export default function CategorySearchScreen() {
           .select("*, seller:users(*)")
           .eq("status", "active");
 
-              if (selectedSubCategoryId) {
-                query = query.or(`category_id.eq.${selectedSubCategoryId},metadata->>subCategory.eq."${selectedSubCategoryName}"`);
-              } else {
-                // Fetch products for main category and all its children
-                const { data: subCats } = await supabase
-                  .from("categories")
-                  .select("id")
-                  .eq("parent_id", mainCategoryId);
-                
-                const catIds = [mainCategoryId, ...(subCats?.map((c) => c.id) || [])];
-                query = query.in("category_id", catIds);
-              }
+        if (selectedSubCategoryId) {
+          query = query.or(
+            `category_id.eq.${selectedSubCategoryId},metadata->>subCategory.eq."${selectedSubCategoryName}"`,
+          );
+        } else {
+          // Fetch products for main category and all its children
+          const { data: subCats } = await supabase
+            .from("categories")
+            .select("id")
+            .eq("parent_id", mainCategoryId);
+
+          const catIds = [mainCategoryId, ...(subCats?.map((c) => c.id) || [])];
+          query = query.in("category_id", catIds);
+        }
         if (searchQuery) {
           query = query.ilike("title", `%${searchQuery}%`);
         }
@@ -146,49 +152,50 @@ export default function CategorySearchScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.subCategoryScroll}
       >
-                <TouchableOpacity
-                  style={[
-                    styles.subChip,
-                    {
-                      backgroundColor: selectedSubCategoryId === null ? themeColors.tint : "#F3F4F6",
-                    },
-                  ]}
-                  onPress={() => {
-                    setSelectedSubCategoryId(null);
-                    setSelectedSubCategoryName(null);
-                  }}
-                >
-                  <ThemedText
-                    style={[
-                      styles.subChipText,
-                      { color: selectedSubCategoryId === null ? "#FFF" : "#4B5563" },
-                    ]}
-                  >
-                    {t("common.showAll")}
-                  </ThemedText>
-                </TouchableOpacity>
-        
-                {subCategories.map((sub) => {
-                  const isSelected = selectedSubCategoryId === sub.id;
-                  return (
-                    <TouchableOpacity
-                      key={sub.id}
-                      style={[
-                        styles.subChip,
-                        {
-                          backgroundColor: isSelected ? themeColors.tint : "#F3F4F6",
-                        },
-                      ]}
-                      onPress={() => {
-                        if (isSelected) {
-                          setSelectedSubCategoryId(null);
-                          setSelectedSubCategoryName(null);
-                        } else {
-                          setSelectedSubCategoryId(sub.id);
-                          setSelectedSubCategoryName(sub.name_key);
-                        }
-                      }}
-                    >
+        <TouchableOpacity
+          style={[
+            styles.subChip,
+            {
+              backgroundColor:
+                selectedSubCategoryId === null ? themeColors.tint : "#F3F4F6",
+            },
+          ]}
+          onPress={() => {
+            setSelectedSubCategoryId(null);
+            setSelectedSubCategoryName(null);
+          }}
+        >
+          <ThemedText
+            style={[
+              styles.subChipText,
+              { color: selectedSubCategoryId === null ? "#FFF" : "#4B5563" },
+            ]}
+          >
+            {t("common.showAll")}
+          </ThemedText>
+        </TouchableOpacity>
+
+        {subCategories.map((sub) => {
+          const isSelected = selectedSubCategoryId === sub.id;
+          return (
+            <TouchableOpacity
+              key={sub.id}
+              style={[
+                styles.subChip,
+                {
+                  backgroundColor: isSelected ? themeColors.tint : "#F3F4F6",
+                },
+              ]}
+              onPress={() => {
+                if (isSelected) {
+                  setSelectedSubCategoryId(null);
+                  setSelectedSubCategoryName(null);
+                } else {
+                  setSelectedSubCategoryId(sub.id);
+                  setSelectedSubCategoryName(sub.name_key);
+                }
+              }}
+            >
               {sub.icon_name && (
                 <DynamicPhosphorIcon
                   name={sub.icon_name}
@@ -245,7 +252,7 @@ export default function CategorySearchScreen() {
       {loading ? (
         <ActivityIndicator
           style={{ marginTop: 50 }}
-          size="large"
+          size="small"
           color={themeColors.tint}
         />
       ) : (
