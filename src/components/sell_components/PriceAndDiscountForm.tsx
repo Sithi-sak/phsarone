@@ -11,13 +11,15 @@ export default function PriceAndDiscountForm() {
   const { draft, updateDraft } = useSellDraft();
   const themeColors = useThemeColor();
   useTranslation();
-
+  const { t } = useTranslation();
   return (
     <>
       {/* Pricing Section */}
       <View style={styles.fieldSection}>
         <View style={styles.labelRow}>
-          <ThemedText style={styles.inputLabel}>Pricing</ThemedText>
+          <ThemedText style={styles.inputLabel}>
+            {t("sellSection.Price")}
+          </ThemedText>
           <ThemedText style={{ color: themeColors.primary }}>*</ThemedText>
         </View>
         <View style={styles.inputWrapper}>
@@ -60,13 +62,18 @@ export default function PriceAndDiscountForm() {
             <CheckIcon size={16} color="#FFF" weight="bold" />
           )}
         </View>
-        <ThemedText style={styles.checkboxLabel}>Negotiable</ThemedText>
+        <ThemedText style={styles.checkboxLabel}>
+          {t("sellSection.Negotiable")}
+        </ThemedText>
       </TouchableOpacity>
 
       {/* Discount Section */}
       <View style={styles.fieldSection}>
         <View style={styles.labelRow}>
-          <ThemedText style={styles.inputLabel}>Discount</ThemedText>
+          <ThemedText style={styles.inputLabel}>
+            {" "}
+            {t("sellSection.Discount")}
+          </ThemedText>
           <ThemedText style={{ color: themeColors.primary }}>*</ThemedText>
         </View>
         <View style={styles.inputWrapper}>

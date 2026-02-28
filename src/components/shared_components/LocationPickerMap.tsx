@@ -4,9 +4,16 @@ import { TradeDraft } from "@src/context/TradeDraftContext";
 import useThemeColor from "@src/hooks/useThemeColor";
 import * as Location from "expo-location";
 import { TFunction } from "i18next";
+import { CrosshairIcon } from "phosphor-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Linking, StyleSheet, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import MapView, { Marker } from "react-native-maps";
 
 const DEFAULT_REGION = {
@@ -51,35 +58,46 @@ export default function LocationPickerMap({
     ),
   );
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [isRetracking, setIsRetracking] = useState(false);
   const [markerCoord, setMarkerCoord] = useState(currentDraft.location);
 
+  // Initial location fetch on mount only
   useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+    if (!hasSelectedLocation) {
+      fetchCurrentLocation();
+    }
+  }, []);
+
+  const fetchCurrentLocation = async () => {
+    setIsRetracking(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         console.log("Permission to access location was denied");
         return;
       }
-      if (!hasSelectedLocation) {
-        try {
-          let currentLocation = await Location.getCurrentPositionAsync({});
-          const newLocation = {
-            latitude: currentLocation.coords.latitude,
-            longitude: currentLocation.coords.longitude,
-          };
-          onUpdateDraft("location", newLocation);
-          setMarkerCoord(newLocation);
-          mapRef.current?.animateToRegion(
-            { ...newLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-            1000,
-          );
-          setHasSelectedLocation(true);
-        } catch (error) {
-          console.error("Error getting current location:", error);
-        }
-      }
-    })();
-  }, [currentDraft.location.latitude]);
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const newLocation = {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+      };
+      onUpdateDraft("location", newLocation);
+      setMarkerCoord(newLocation);
+      mapRef.current?.animateToRegion(
+        { ...newLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        1000,
+      );
+      setHasSelectedLocation(true);
+      setIsConfirmed(false);
+    } catch (error) {
+      console.error("Error getting current location:", error);
+    } finally {
+      setIsRetracking(false);
+    }
+  };
+
   const styles = getStyles(themeColors);
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${markerCoord.latitude},${markerCoord.longitude}`;
 
@@ -102,6 +120,7 @@ export default function LocationPickerMap({
   );
 
   const handleTap = (coordinate: { latitude: number; longitude: number }) => {
+    if (isConfirmed) return;
     setMarkerCoord(coordinate);
     onUpdateDraft("location", coordinate);
     mapRef.current?.animateToRegion(
@@ -124,10 +143,7 @@ export default function LocationPickerMap({
 
   return (
     <>
-      <View
-        style={styles.mapContainer}
-        onStartShouldSetResponderCapture={() => !isConfirmed}
-      >
+      <View style={styles.mapContainer}>
         <MapView
           ref={mapRef}
           style={styles.map}
@@ -140,19 +156,40 @@ export default function LocationPickerMap({
                 }
               : DEFAULT_REGION
           }
-          onPress={(e) => !isConfirmed && handleTap(e.nativeEvent.coordinate)}
-          scrollEnabled={!isConfirmed}
-          zoomEnabled={!isConfirmed}
+          onPress={(e) => handleTap(e.nativeEvent.coordinate)}
+          scrollEnabled={true}
+          zoomEnabled={true}
           pitchEnabled={false}
           rotateEnabled={false}
         >
-          <Marker
-            coordinate={markerCoord}
-            draggable={!isConfirmed}
-            onDragEnd={(e) => handleDragEnd(e.nativeEvent.coordinate)}
-          />
+          {hasSelectedLocation && (
+            <Marker
+              coordinate={markerCoord}
+              draggable={!isConfirmed}
+              onDragEnd={(e) => handleDragEnd(e.nativeEvent.coordinate)}
+            />
+          )}
         </MapView>
+
         {isConfirmed && <View style={styles.mapOverlay} />}
+
+        {/* Re-track location button */}
+        {!isConfirmed && (
+          <TouchableOpacity
+            style={[
+              styles.reTrackButton,
+              { backgroundColor: themeColors.background },
+            ]}
+            onPress={fetchCurrentLocation}
+            disabled={isRetracking}
+          >
+            {isRetracking ? (
+              <ActivityIndicator size="small" color={themeColors.tint} />
+            ) : (
+              <CrosshairIcon size={22} color={themeColors.tint} weight="bold" />
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.buttonContainer}>
@@ -201,6 +238,21 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     mapOverlay: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: "rgba(0,0,0,0.3)",
+    },
+    reTrackButton: {
+      position: "absolute",
+      bottom: 12,
+      right: 12,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: "center",
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 4,
     },
     buttonContainer: {
       marginBottom: 8,

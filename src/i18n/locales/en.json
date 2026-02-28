@@ -13,7 +13,8 @@
     "upgrade": "Upgrade",
     "myLists": "My Lists",
     "active": "Active",
-    "sold": "Sold",
+    "sold": "Paused",
+    "pause": "Paused",
     "draft": "Draft",
     "drafts": "Drafts",
     "expired": "Expired",
@@ -551,7 +552,7 @@
     "upload_failed": "Failed to upload avatar."
   },
   "listings_screen": {
-    "sold_on": "Sold on",
+    "pause_on": "Paused on",
     "relist": "Relist",
     "completion": "Completion",
     "missing_info": "Missing: {{info}}",
@@ -559,7 +560,7 @@
     "untitled_draft": "Untitled Draft",
     "boost": "Boost",
     "edit": "Edit",
-    "sold": "Sold"
+    "pause": "Pause"
   },
   "public_profile": {
     "no_bio": "No bio yet.",

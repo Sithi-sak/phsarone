@@ -1,6 +1,5 @@
 import ProductCard from "@src/components/category_components/ProductCard";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
-import useThemeColor from "@src/hooks/useThemeColor";
 import { mapDatabaseProductToProduct } from "@src/utils/productUtils";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -16,7 +15,6 @@ export default function RecentListings({
   products,
   loading,
 }: RecentListingsProps) {
-  const themeColors = useThemeColor();
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -80,12 +78,12 @@ const styles = StyleSheet.create({
   },
   container: {
     marginHorizontal: 6,
-    marginBottom: 64,
+    marginBottom: 68,
   },
   title: {
     fontSize: 20,
     fontWeight: "bold",
-    marginBottom: 8,
+    paddingBottom: 10,
     marginLeft: 8,
   },
   row: {
@@ -94,10 +92,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   productItem: {
-    flex: 1,
-    flexBasis: "48%",
-  },
-  placeholder: {
-    opacity: 0,
+    width: "49%",
   },
 });

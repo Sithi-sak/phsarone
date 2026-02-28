@@ -29,7 +29,7 @@ const ProductDescription: React.FC<ProductDescriptionProps> = ({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
     paddingHorizontal: 16,
   },
   sectionTitle: {

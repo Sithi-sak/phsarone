@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { supabase } from "@src/lib/supabase";
 import { formatPrice, Product } from "@src/types/productTypes";
 import { TFunction } from "i18next";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
-import { supabase } from "@src/lib/supabase";
 
 interface ProductInfoSectionProps {
   product: Product;
@@ -35,9 +35,9 @@ const ProductInfoSection: React.FC<ProductInfoSectionProps> = ({
     try {
       const { count, error } = await supabase
         .from("analytics_views")
-        .select("*", { count: 'exact', head: true })
+        .select("*", { count: "exact", head: true })
         .eq("product_id", product.id);
-      
+
       if (error) throw error;
       setViewCount(count || 0);
     } catch (error) {
@@ -109,8 +109,8 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     titleRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "flex-start",
-      marginBottom: 4,
+      alignItems: "center",
+      marginBottom: 8,
     },
     productName: {
       fontSize: 24,
@@ -129,14 +129,13 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     timeAgo: {
       fontSize: 13,
       opacity: 0.5,
-      marginBottom: 12,
+      marginBottom: 8,
     },
     priceContainer: {
       flexDirection: "row",
       alignItems: "center",
       flexWrap: "wrap",
       gap: 8,
-      marginBottom: 12,
     },
     price: {
       fontSize: 28,
@@ -160,7 +159,7 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       fontWeight: "bold",
     },
     negotiableBadge: {
-      backgroundColor: themeColors.border + "20",
+      backgroundColor: themeColors.success + "20",
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 6,

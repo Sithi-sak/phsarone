@@ -6,6 +6,8 @@ import { CheckIcon, ChecksIcon } from "phosphor-react-native";
 import React from "react";
 import { Image, Pressable, TouchableOpacity, View } from "react-native";
 
+const KHMER_REGEX = /[\u1780-\u17FF]/;
+
 export default function Bubble({
   item,
   isMe,
@@ -59,9 +61,14 @@ export default function Bubble({
           content.text ||
           content.message ||
           (typeof item.content === "string" ? item.content : "");
+
         return (
           <ThemedText
-            style={{ color: textColor, fontSize: 15, lineHeight: 22 }}
+            style={{
+              color: textColor,
+              fontSize: 15,
+              lineHeight: 22,
+            }}
           >
             {text}
           </ThemedText>
@@ -69,6 +76,15 @@ export default function Bubble({
       }
     }
   };
+
+  // Detect Khmer in text messages for bubble padding adjustment
+  const text =
+    content.type === "text"
+      ? content.text ||
+        content.message ||
+        (typeof item.content === "string" ? item.content : "")
+      : "";
+  const hasKhmerContent = KHMER_REGEX.test(text);
 
   return (
     <View
@@ -85,10 +101,11 @@ export default function Bubble({
         delayLongPress={350}
         style={[
           {
-            paddingVertical: 10,
+            paddingVertical: hasKhmerContent ? 5 : 10,
             paddingHorizontal: 14,
             borderRadius: 18,
             backgroundColor: bubbleBg,
+            justifyContent: "center",
           },
           content.type === "image" ? { padding: 3, borderRadius: 16 } : null,
         ]}

@@ -1,6 +1,5 @@
-import { useTranslation } from "react-i18next";
-import { TextInput, TextInputProps } from "react-native";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { TextInput, TextInputProps } from "react-native";
 
 export function ThemedTextInput({ style, ...props }: TextInputProps) {
   const themeColors = useThemeColor();

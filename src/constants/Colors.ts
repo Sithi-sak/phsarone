@@ -20,6 +20,10 @@ const greenScale = {
   500: "#22C55E",
   600: "#16a34a",
 };
+const greyScale = {
+  500: "#84888f",
+ 
+};
 
 const yellowScale = {
   50: "#FEFCE8",
@@ -41,7 +45,7 @@ export const Colors = {
     secondaryBackground: "#F0F0F0",
     card: "#FFFFFF",
     tint: redScale[500],
-    tabIconDefault: "#868d99",
+    tabIconDefault: "#84888f",
     primary: redScale[500],
     border: "#CED4DA",
     primaryButtonText: "#FFFFFF",
@@ -75,4 +79,5 @@ export const Colors = {
   blues: blueScale,
   greens: greenScale,
   yellows: yellowScale,
+  gray: greyScale,
 };

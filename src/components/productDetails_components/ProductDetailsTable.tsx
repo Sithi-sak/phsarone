@@ -90,7 +90,7 @@ const ProductDetailsTable: React.FC<ProductDetailsTableProps> = ({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
     paddingHorizontal: 16,
   },
   sectionTitle: {

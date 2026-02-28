@@ -14,12 +14,12 @@ import {
   CaretRightIcon,
   ChartBarIcon,
   ChartPieSliceIcon,
-  CheckFatIcon,
   ClockCountdownIcon,
   ClockCounterClockwiseIcon,
   GearSixIcon,
   HeadsetIcon,
   MoonIcon,
+  Pause,
   PencilSimpleLineIcon,
   PresentationChartIcon,
   SparkleIcon,
@@ -29,9 +29,10 @@ import {
   TagSimpleIcon,
   UserCircleIcon,
 } from "phosphor-react-native";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Animated,
   Image,
   ScrollView,
   StyleSheet,
@@ -49,6 +50,9 @@ export default function ProfileScreen() {
   const router = useRouter();
 
   const [dbUser, setDbUser] = useState<any>(null);
+
+  const scrollAnim = useRef(new Animated.Value(0)).current;
+  const headerOpacityAnim = useRef(new Animated.Value(1)).current;
 
   // Fetch/Refresh user data from Supabase whenever this tab is focused
   useFocusEffect(
@@ -91,175 +95,224 @@ export default function ProfileScreen() {
     await AsyncStorage.setItem("user-language", nextLanguage);
   };
 
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
+    { useNativeDriver: false },
+  );
+
+  useEffect(() => {
+    const listener = scrollAnim.addListener(({ value }) => {
+      const opacity = Math.max(0, 1 - value / 100);
+      headerOpacityAnim.setValue(opacity);
+    });
+
+    return () => scrollAnim.removeListener(listener);
+  }, [scrollAnim, headerOpacityAnim]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.topActions}>
-          <TouchableOpacity
-            onPress={() => router.push("/subscription" as Href)}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={["#E73121", "#8B1D14"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.upgradeBtn}
-            >
-              <View style={styles.upgradeContent}>
-                <ThemedText style={styles.upgradeText}>
-                  {t("user_actions.upgrade")}
-                </ThemedText>
-                <SparkleIcon
-                  size={16}
-                  weight="fill"
-                  color="#FFD230"
-                  style={{ marginLeft: 4 }}
-                />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <View style={styles.rightIcons}>
-            <TouchableOpacity
-              style={styles.languageIcon}
-              onPress={toggleLanguage}
-            >
-              <DynamicPhosphorIcon
-                name="GlobeSimple"
-                size={24}
-                color={themeColors.text}
-              />
-              <ThemedText style={styles.languageTitle}>
-                {t("navigation.toggle_language")}
-              </ThemedText>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={toggleTheme}>
-              {theme === "light" ? (
-                <MoonIcon size={24} color={themeColors.text} />
-              ) : (
-                <SunIcon size={24} color={themeColors.text} />
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => router.push("/settings" as Href)}>
-              <GearSixIcon size={28} color={themeColors.text} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.userInfo}>
-          <View
-            style={[
-              styles.avatarPlaceholder,
-              { backgroundColor: themeColors.card },
-            ]}
-          >
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <UserCircleIcon
-                size={60}
-                color={themeColors.text}
-                weight="fill"
-              />
-            )}
-          </View>
-          <View style={styles.userTextContainer}>
-            <ThemedText style={styles.userName}>{displayName}</ThemedText>
-            <ThemedText style={styles.userType}>
-              {t("user_actions.regular_account")}
-            </ThemedText>
-            <TouchableOpacity
-              style={styles.viewProfileBtn}
-              onPress={() => userId && router.push(`/user/${userId}` as Href)}
-            >
-              <ThemedText style={styles.viewProfileText}>
-                {t("productDetail.viewProfile")}
-              </ThemedText>
-              <CaretRightIcon
-                size={14}
-                color={Colors.reds[500]}
-                weight="bold"
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <ProfileSection title={t("user_actions.myLists")}>
-          <GridItem
-            icon={<TagIcon color={Colors.reds[500]} weight="fill" />}
-            label={t("user_actions.active")}
-            onPress={() => router.push("/user/listings?status=active" as Href)}
-          />
-          <GridItem
-            icon={<CheckFatIcon color={Colors.reds[500]} weight="fill" />}
-            label={t("user_actions.sold")}
-            onPress={() => router.push("/user/listings?status=sold" as Href)}
-          />
-          <GridItem
-            icon={
-              <PencilSimpleLineIcon color={Colors.reds[500]} weight="fill" />
-            }
-            label={t("user_actions.drafts")}
-            onPress={() => router.push("/user/listings?status=draft" as Href)}
-          />
-          <GridItem
-            icon={<ClockCountdownIcon color={Colors.reds[500]} weight="fill" />}
-            label={t("user_actions.expired")}
-            onPress={() => router.push("/user/listings?status=expired" as Href)}
-          />
-        </ProfileSection>
-
-        <ProfileSection title={t("user_actions.dashboard")}>
-          <GridItem
-            icon={<ChartPieSliceIcon size={24} color={themeColors.text} />}
-            label={t("user_actions.overview")}
-          />
-          <GridItem
-            icon={<ChartBarIcon size={24} color={themeColors.text} />}
-            label={t("user_actions.insight")}
-          />
-          <GridItem
-            icon={<TagSimpleIcon size={24} color={themeColors.text} />}
-            label={t("user_actions.myTrade")}
-          />
-          <GridItem
-            icon={<PresentationChartIcon size={24} color={themeColors.text} />}
-            label={t("user_actions.performance")}
-          />
-        </ProfileSection>
-
-        <View
-          style={[styles.footerGrid, { backgroundColor: themeColors.card }]}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+        <Animated.View
+          style={{
+            opacity: headerOpacityAnim,
+            transform: [
+              {
+                scale: scrollAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: [1, 0.9],
+                  extrapolate: "clamp",
+                }),
+              },
+            ],
+          }}
         >
-          <GridItem
-            icon={<StorefrontIcon size={24} color={themeColors.text} />}
-            label={t("user_actions.following")}
-            onPress={() => userId && router.push({ pathname: "/user/following", params: { id: userId, type: 'following' } } as any)}
-          />
-          <GridItem
-            icon={
-              <ClockCounterClockwiseIcon size={24} color={themeColors.text} />
-            }
-            label={t("user_actions.history")}
-            onPress={() => router.push("/user/history" as Href)}
-          />
-          <GridItem
-            icon={<BookmarkSimpleIcon size={24} color={themeColors.text} />}
-            label={t("user_actions.bookMark")}
-            onPress={() => router.push("/user/bookmarks" as Href)}
-          />
-          <GridItem
-            icon={<CardholderIcon size={24} color={themeColors.text} />}
-            label={t("user_actions.billing")}
-          />
-          <GridItem
-            icon={<HeadsetIcon size={24} color={themeColors.text} />}
-            label={t("user_actions.helpCenter")}
-            onPress={() => router.push("/user/support" as Href)}
-          />
-        </View>
+          <View style={styles.topActions}>
+            <TouchableOpacity
+              onPress={() => router.push("/subscription" as Href)}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={["#E73121", "#8B1D14"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.upgradeBtn}
+              >
+                <View style={styles.upgradeContent}>
+                  <ThemedText style={styles.upgradeText}>
+                    {t("user_actions.upgrade")}
+                  </ThemedText>
+                  <SparkleIcon
+                    size={16}
+                    weight="fill"
+                    color="#FFD230"
+                    style={{ marginLeft: 4 }}
+                  />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <View style={styles.rightIcons}>
+              <TouchableOpacity
+                style={styles.languageIcon}
+                onPress={toggleLanguage}
+              >
+                <DynamicPhosphorIcon
+                  name="GlobeSimple"
+                  size={24}
+                  color={themeColors.text}
+                />
+                <ThemedText style={styles.languageTitle}>
+                  {t("navigation.toggle_language")}
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={toggleTheme}>
+                {theme === "light" ? (
+                  <MoonIcon size={24} color={themeColors.text} />
+                ) : (
+                  <SunIcon size={24} color={themeColors.text} />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push("/settings" as Href)}
+              >
+                <GearSixIcon size={28} color={themeColors.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.userInfo}>
+            <View
+              style={[
+                styles.avatarPlaceholder,
+                { backgroundColor: themeColors.card },
+              ]}
+            >
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <UserCircleIcon
+                  size={60}
+                  color={themeColors.text}
+                  weight="fill"
+                />
+              )}
+            </View>
+            <View style={styles.userTextContainer}>
+              <ThemedText style={styles.userName}>{displayName}</ThemedText>
+              <ThemedText style={styles.userType}>
+                {t("user_actions.regular_account")}
+              </ThemedText>
+              <TouchableOpacity
+                style={styles.viewProfileBtn}
+                onPress={() => userId && router.push(`/user/${userId}` as Href)}
+              >
+                <ThemedText style={styles.viewProfileText}>
+                  {t("productDetail.viewProfile")}
+                </ThemedText>
+                <CaretRightIcon
+                  size={14}
+                  color={Colors.reds[500]}
+                  weight="bold"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <ProfileSection title={t("user_actions.myLists")}>
+            <GridItem
+              icon={<TagIcon color={Colors.reds[500]} weight="fill" />}
+              label={t("user_actions.active")}
+              onPress={() =>
+                router.push("/user/listings?status=active" as Href)
+              }
+            />
+            <GridItem
+              icon={<Pause color={Colors.reds[500]} weight="fill" />}
+              label={t("user_actions.pause")}
+              onPress={() => router.push("/user/listings?status=sold" as Href)}
+            />
+            <GridItem
+              icon={
+                <PencilSimpleLineIcon color={Colors.reds[500]} weight="fill" />
+              }
+              label={t("user_actions.drafts")}
+              onPress={() => router.push("/user/listings?status=draft" as Href)}
+            />
+            <GridItem
+              icon={
+                <ClockCountdownIcon color={Colors.reds[500]} weight="fill" />
+              }
+              label={t("user_actions.expired")}
+              onPress={() =>
+                router.push("/user/listings?status=expired" as Href)
+              }
+            />
+          </ProfileSection>
+
+          <ProfileSection title={t("user_actions.dashboard")}>
+            <GridItem
+              icon={<ChartPieSliceIcon size={24} color={themeColors.text} />}
+              label={t("user_actions.overview")}
+            />
+            <GridItem
+              icon={<ChartBarIcon size={24} color={themeColors.text} />}
+              label={t("user_actions.insight")}
+            />
+            <GridItem
+              icon={<TagSimpleIcon size={24} color={themeColors.text} />}
+              label={t("user_actions.myTrade")}
+            />
+            <GridItem
+              icon={
+                <PresentationChartIcon size={24} color={themeColors.text} />
+              }
+              label={t("user_actions.performance")}
+            />
+          </ProfileSection>
+
+          <View
+            style={[styles.footerGrid, { backgroundColor: themeColors.card }]}
+          >
+            <GridItem
+              icon={<StorefrontIcon size={24} color={themeColors.text} />}
+              label={t("user_actions.following")}
+              onPress={() =>
+                userId &&
+                router.push({
+                  pathname: "/user/following",
+                  params: { id: userId, type: "following" },
+                } as any)
+              }
+            />
+            <GridItem
+              icon={
+                <ClockCounterClockwiseIcon size={24} color={themeColors.text} />
+              }
+              label={t("user_actions.history")}
+              onPress={() => router.push("/user/history" as Href)}
+            />
+            <GridItem
+              icon={<BookmarkSimpleIcon size={24} color={themeColors.text} />}
+              label={t("user_actions.bookMark")}
+              onPress={() => router.push("/user/bookmarks" as Href)}
+            />
+            <GridItem
+              icon={<CardholderIcon size={24} color={themeColors.text} />}
+              label={t("user_actions.billing")}
+            />
+            <GridItem
+              icon={<HeadsetIcon size={24} color={themeColors.text} />}
+              label={t("user_actions.helpCenter")}
+              onPress={() => router.push("/user/support" as Href)}
+            />
+          </View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );

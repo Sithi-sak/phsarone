@@ -2,6 +2,7 @@ import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRightIcon, CheckCircleIcon } from "phosphor-react-native";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 
 export interface PricingFeature {
@@ -21,8 +22,6 @@ interface PricingCardProps {
   onSelectPlan: (planId: string) => void;
   onContinue: () => void;
 }
-
-import { useTranslation } from "react-i18next";
 
 export default function PricingCard({
   plans,
@@ -65,7 +64,9 @@ export default function PricingCard({
         <ThemedText style={styles.currencySymbol}>$</ThemedText>
         <ThemedText style={styles.price}>{selectedPlan.price}</ThemedText>
       </View>
-      <ThemedText style={styles.perMonth}>{t("subscription_screen.per_month")}</ThemedText>
+      <ThemedText style={styles.perMonth}>
+        {t("subscription_screen.per_month")}
+      </ThemedText>
 
       {/* Features List */}
       <View style={styles.featuresContainer}>

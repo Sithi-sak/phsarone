@@ -99,7 +99,9 @@ export default function ProductDetailsForm() {
         style={[styles.center, { backgroundColor: themeColors.background }]}
       >
         <ActivityIndicator size="small" color={themeColors.primary} />
-        <ThemedText style={{ marginTop: 12 }}>{t("sellSection.loading_details")}</ThemedText>
+        <ThemedText style={{ marginTop: 12 }}>
+          {t("sellSection.loading_details")}
+        </ThemedText>
       </View>
     );
   }
@@ -163,9 +165,6 @@ export default function ProductDetailsForm() {
               <View
                 style={[styles.card, { backgroundColor: themeColors.card }]}
               >
-                <ThemedText style={styles.sectionTitle}>
-                  {t("sellSection.Price")}
-                </ThemedText>
                 <PriceAndDiscountForm />
               </View>
 
@@ -194,9 +193,6 @@ export default function ProductDetailsForm() {
               <View
                 style={[styles.card, { backgroundColor: themeColors.card }]}
               >
-                <ThemedText style={styles.sectionTitle}>
-                  {t("sellSection.SellerContactDetail")}
-                </ThemedText>
                 <SellerContactForm themeColors={themeColors} t={t} />
               </View>
 
@@ -225,7 +221,11 @@ export default function ProductDetailsForm() {
                   disabled={isPosting}
                 >
                   <ThemedText style={styles.submitBtnText}>
-                    {isPosting ? t("sellSection.saving") : editId ? t("sellSection.update") : t("sellSection.save")}
+                    {isPosting
+                      ? t("sellSection.saving")
+                      : editId
+                        ? t("sellSection.update")
+                        : t("sellSection.save")}
                   </ThemedText>
                 </TouchableOpacity>
               </View>

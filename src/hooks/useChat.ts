@@ -130,6 +130,7 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
   const [error, setError] = useState<string | null>(null);
   const [otherUserOnline, setOtherUserOnline] = useState(false);
   const isFetchingRef = useRef(false);
+  const subscriptionRef = useRef<any>(null);
 
   const fetchConversationAndMessages = useCallback(async () => {
     if (isFetchingRef.current) return;
@@ -196,8 +197,10 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
 
       if (currentConversation) {
         const { data: fetchedMessages, error: msgError } = await authSupabase
-          .from('messages').select('*, sender:users!messages_sender_id_fkey(*)')
-          .eq('conversations_id', currentConversation.id).order('created_at', { ascending: true });
+          .from('messages')
+          .select('*, sender:users!messages_sender_id_fkey(*)')
+          .eq('conversations_id', currentConversation.id)
+          .order('created_at', { ascending: true });
         if (msgError) throw msgError;
         setMessages(fetchedMessages || []);
       }
@@ -212,39 +215,90 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
 
   useEffect(() => {
     fetchConversationAndMessages();
-  }, [userId, initialConversationId, productId, sellerId, tradeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, initialConversationId, productId, sellerId, tradeId]);
 
   // ── Realtime: new messages ────────────────────────────────────────────────
   useEffect(() => {
     if (!conversation?.id) return;
-    const channel = supabase
-      .channel(`messages:${conversation.id}`)
-      .on<Message>('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversations_id=eq.${conversation.id}` },
+
+    // Clean up previous subscription
+    if (subscriptionRef.current) {
+      supabase.removeChannel(subscriptionRef.current);
+      subscriptionRef.current = null;
+    }
+
+    const channel = supabase.channel(`messages:${conversation.id}`, {
+      config: { 
+        broadcast: { self: true },
+      },
+    });
+
+    channel
+      .on<Message>(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversations_id=eq.${conversation.id}`,
+        },
         (payload) => {
-          setMessages(prev => {
-            const exists = prev.find(m => m.id === (payload.new as Message).id);
+          console.log('✅ Message INSERT received:', payload.new);
+          const newMsg = payload.new as Message;
+          
+          setMessages((prev) => {
+            const exists = prev.some(m => m.id === newMsg.id);
             if (exists) return prev;
-            return [...prev, payload.new as Message];
+            return [...prev, newMsg];
           });
         }
       )
-      // Listen for message deletes so UI updates in real time for both users
-      .on('postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'messages', filter: `conversations_id=eq.${conversation.id}` },
+      .on<Message>(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversations_id=eq.${conversation.id}`,
+        },
         (payload) => {
-          setMessages(prev => prev.filter(m => m.id !== (payload.old as any).id));
+          console.log('✅ Message DELETE received:', payload.old);
+          setMessages((prev) => prev.filter((m) => m.id !== (payload.old as any).id));
         }
       )
-      // Listen for is_read updates (seen status)
-      .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversations_id=eq.${conversation.id}` },
+      .on<Message>(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversations_id=eq.${conversation.id}`,
+        },
         (payload) => {
-          setMessages(prev => prev.map(m => m.id === (payload.new as Message).id ? { ...m, ...(payload.new as Message) } : m));
+          console.log('✅ Message UPDATE received:', payload.new);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === (payload.new as Message).id ? { ...m, ...(payload.new as Message) } : m
+            )
+          );
         }
       )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+      .subscribe((status) => {
+        console.log('📡 Channel status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to messages');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Channel error occurred');
+        }
+      });
+
+    subscriptionRef.current = channel;
+
+    return () => {
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+      }
+    };
   }, [conversation?.id]);
 
   // ── Realtime: presence (active/online status) ─────────────────────────────
@@ -282,29 +336,40 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
     if (!userId || !conversation?.id) throw new Error("Not authenticated or no conversation.");
 
     const tempId = `temp_${Date.now()}`;
+    const now = new Date().toISOString();
     const optimistic: Message = {
       id: tempId,
       conversations_id: conversation.id,
       sender_id: userId,
       content: content as any,
-      created_at: new Date().toISOString(),
+      created_at: now,
       is_read: false,
       sender: undefined,
     } as any;
-    setMessages(prev => [...prev, optimistic]);
+    setMessages((prev) => [...prev, optimistic]);
 
     try {
       const token = await getToken({});
       const authSupabase = createClerkSupabaseClient(token);
       const { data, error: sendError } = await authSupabase
         .from('messages')
-        .insert({ conversations_id: conversation.id, sender_id: userId, content: content as any })
+        .insert({
+          conversations_id: conversation.id,
+          sender_id: userId,
+          content: content as any,
+        })
         .select('*, sender:users!messages_sender_id_fkey(*)')
         .single();
+
       if (sendError) throw sendError;
-      setMessages(prev => prev.map(m => m.id === tempId ? (data as Message) : m));
+      
+      // Replace optimistic with real message
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? (data as Message) : m))
+      );
     } catch (err: any) {
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw err;
     }
   };
@@ -359,7 +424,8 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
       const authSupabase = createClerkSupabaseClient(token);
       await authSupabase.from('messages').update({ is_read: true })
         .eq('conversations_id', conversation.id).neq('sender_id', userId);
-      // Update local state immediately
+      
+      // Update local state immediately - mark all messages from other user as read
       setMessages(prev => prev.map(m => m.sender_id !== userId ? { ...m, is_read: true } : m));
     } catch (err: any) {
       console.error("Error marking messages as read:", err);

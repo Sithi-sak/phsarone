@@ -2,14 +2,14 @@ import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { useRouter } from "expo-router";
 import {
-    ArmchairIcon,
-    BuildingsIcon,
-    CarIcon,
-    DesktopIcon,
-    DeviceMobileIcon,
-    LightningIcon,
-    ShirtFoldedIcon,
-    SparkleIcon,
+  ArmchairIcon,
+  BuildingsIcon,
+  CarIcon,
+  DesktopIcon,
+  DeviceMobileIcon,
+  LightningIcon,
+  ShirtFoldedIcon,
+  SparkleIcon,
 } from "phosphor-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
@@ -18,14 +18,46 @@ export default function ProductCategory() {
   const themeColors = useThemeColor();
   const router = useRouter();
   const CATEGORIES = [
-    { id: "10000000-0000-0000-0000-000000000001", nameKey: "smart_phone", icon: DeviceMobileIcon },
-    { id: "20000000-0000-0000-0000-000000000001", nameKey: "vehicles", icon: CarIcon },
-    { id: "30000000-0000-0000-0000-000000000001", nameKey: "beauty", icon: SparkleIcon },
-    { id: "40000000-0000-0000-0000-000000000001", nameKey: "furniture", icon: ArmchairIcon },
-    { id: "50000000-0000-0000-0000-000000000001", nameKey: "clothing", icon: ShirtFoldedIcon },
-    { id: "60000000-0000-0000-0000-000000000001", nameKey: "computer", icon: DesktopIcon },
-    { id: "70000000-0000-0000-0000-000000000001", nameKey: "real_estates", icon: BuildingsIcon },
-    { id: "80000000-0000-0000-0000-000000000001", nameKey: "electronic", icon: LightningIcon },
+    {
+      id: "10000000-0000-0000-0000-000000000001",
+      nameKey: "smart_phone",
+      icon: DeviceMobileIcon,
+    },
+    {
+      id: "20000000-0000-0000-0000-000000000001",
+      nameKey: "vehicles",
+      icon: CarIcon,
+    },
+    {
+      id: "30000000-0000-0000-0000-000000000001",
+      nameKey: "beauty",
+      icon: SparkleIcon,
+    },
+    {
+      id: "40000000-0000-0000-0000-000000000001",
+      nameKey: "furniture",
+      icon: ArmchairIcon,
+    },
+    {
+      id: "50000000-0000-0000-0000-000000000001",
+      nameKey: "clothing",
+      icon: ShirtFoldedIcon,
+    },
+    {
+      id: "60000000-0000-0000-0000-000000000001",
+      nameKey: "computer",
+      icon: DesktopIcon,
+    },
+    {
+      id: "70000000-0000-0000-0000-000000000001",
+      nameKey: "real_estates",
+      icon: BuildingsIcon,
+    },
+    {
+      id: "80000000-0000-0000-0000-000000000001",
+      nameKey: "electronic",
+      icon: LightningIcon,
+    },
   ];
 
   const handlePress = (id: string, nameKey: string) => {
@@ -51,7 +83,7 @@ export default function ProductCategory() {
                 },
               ]}
             >
-              <Icon size={16} color={themeColors.text}></Icon>
+              <Icon size={18} color={themeColors.text}></Icon>
               <ThemedText style={styles.chipLabel}>
                 {t(`categories.${item.nameKey}`)}
               </ThemedText>
@@ -68,7 +100,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 16,
   },
   categoryText: {
@@ -84,13 +116,14 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 99,
+    gap: 4,
   },
   chipLabel: {
     paddingLeft: 8,
     fontSize: 14,
-    fontWeight: "400",
+    fontWeight: "500",
   },
 });

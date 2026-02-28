@@ -9,8 +9,8 @@ import {
   ArrowsCounterClockwiseIcon,
   CaretLeftIcon,
   ChatTeardropTextIcon,
-  CheckCircleIcon,
   EyeIcon,
+  PauseIcon,
   PencilSimpleIcon,
   RocketLaunchIcon,
   TrashIcon,
@@ -163,18 +163,24 @@ export default function MyListingsScreen() {
           onPress={() => router.push(`/sell/details?editId=${item.id}`)}
         >
           <PencilSimpleIcon size={18} color={themeColors.text} />
-          <ThemedText style={styles.actionButtonText}>{t("listings_screen.edit")}</ThemedText>
+          <ThemedText style={styles.actionButtonText}>
+            {t("listings_screen.edit")}
+          </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
           <RocketLaunchIcon size={18} color={themeColors.text} />
-          <ThemedText style={styles.actionButtonText}>{t("listings_screen.boost")}</ThemedText>
+          <ThemedText style={styles.actionButtonText}>
+            {t("listings_screen.boost")}
+          </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleUpdateStatus(item.id, "sold")}
         >
-          <CheckCircleIcon size={18} color={themeColors.text} />
-          <ThemedText style={styles.actionButtonText}>{t("listings_screen.sold")}</ThemedText>
+          <PauseIcon size={18} color={themeColors.text} />
+          <ThemedText style={styles.actionButtonText}>
+            {t("listings_screen.pause")}
+          </ThemedText>
         </TouchableOpacity>
       </View>
     </View>
@@ -194,7 +200,8 @@ export default function MyListingsScreen() {
             {item.title}
           </ThemedText>
           <ThemedText style={styles.soldOn}>
-            {t("listings_screen.sold_on")} {new Date(item.updated_at).toLocaleDateString()}
+            {t("listings_screen.pause_on")}{" "}
+            {new Date(item.updated_at).toLocaleDateString()}
           </ThemedText>
 
           <View style={styles.soldPriceRow}>
@@ -206,7 +213,9 @@ export default function MyListingsScreen() {
               onPress={() => handleUpdateStatus(item.id, "active")}
             >
               <ArrowsCounterClockwiseIcon size={16} color="#fff" />
-              <ThemedText style={styles.relistText}>{t("listings_screen.relist")}</ThemedText>
+              <ThemedText style={styles.relistText}>
+                {t("listings_screen.relist")}
+              </ThemedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -230,7 +239,9 @@ export default function MyListingsScreen() {
 
           <View style={styles.progressContainer}>
             <View style={styles.progressHeader}>
-              <ThemedText style={styles.progressLabel}>{t("listings_screen.completion")}</ThemedText>
+              <ThemedText style={styles.progressLabel}>
+                {t("listings_screen.completion")}
+              </ThemedText>
               <ThemedText style={styles.progressPercent}>65%</ThemedText>
             </View>
             <View style={styles.progressBarBg}>
@@ -241,7 +252,9 @@ export default function MyListingsScreen() {
           <View style={styles.missingInfoRow}>
             <WarningCircleIcon size={14} color="#E44336" weight="fill" />
             <ThemedText style={styles.missingText}>
-              {t("listings_screen.missing_info", { info: "Price, Description" })}
+              {t("listings_screen.missing_info", {
+                info: "Price, Description",
+              })}
             </ThemedText>
           </View>
         </View>

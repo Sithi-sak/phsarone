@@ -28,6 +28,24 @@ BEFORE UPDATE ON public.users
 FOR EACH ROW
 EXECUTE PROCEDURE public.handle_user_activity();
 
+-- Create a function to update conversation on message insert
+CREATE OR REPLACE FUNCTION public.update_conversation_on_message_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.conversations
+  SET updated_at = NOW()
+  WHERE id = NEW.conversations_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create a trigger to update conversation on message insert
+DROP TRIGGER IF EXISTS conversation_updated_on_message_insert;
+CREATE TRIGGER conversation_updated_on_message_insert
+  AFTER INSERT ON public.messages
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_conversation_on_message_insert();
+
 -- RLS POLICIES FOR CONVERSATIONS --
 
 -- Enable RLS (already enabled in previous migration, but being safe)
@@ -58,55 +76,28 @@ USING ((SELECT public.clerk_user_id()) IN (buyer_id, seller_id));
 
 -- RLS POLICIES FOR MESSAGES --
 
--- Enable RLS
+-- Enable RLS on messages
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users can view messages in their conversations" ON public.messages;
-DROP POLICY IF EXISTS "Users can send messages to their conversations" ON public.messages;
-DROP POLICY IF EXISTS "Users can mark messages as read" ON public.messages;
-DROP POLICY IF EXISTS "Users can delete messages in their conversations" ON public.messages;
+-- ✅ FIX: Use clerk_user_id() instead of auth.uid()
+CREATE POLICY "users_can_insert_messages" ON public.messages
+  FOR INSERT
+  WITH CHECK (sender_id = (SELECT public.clerk_user_id()));
 
-CREATE POLICY "Users can view messages in their conversations"
-ON public.messages FOR SELECT
-USING (
-    EXISTS (
-        SELECT 1 FROM public.conversations
-        WHERE id = conversations_id
-        AND (SELECT public.clerk_user_id()) IN (buyer_id, seller_id)
+CREATE POLICY "users_can_read_messages" ON public.messages
+  FOR SELECT
+  USING (
+    conversations_id IN (
+      SELECT id FROM public.conversations
+      WHERE buyer_id = (SELECT public.clerk_user_id()) OR seller_id = (SELECT public.clerk_user_id())
     )
-);
+  );
 
-CREATE POLICY "Users can send messages to their conversations"
-ON public.messages FOR INSERT
-WITH CHECK (
-    (SELECT public.clerk_user_id()) = sender_id
-    AND EXISTS (
-        SELECT 1 FROM public.conversations
-        WHERE id = conversations_id
-        AND (SELECT public.clerk_user_id()) IN (buyer_id, seller_id)
-    )
-);
+CREATE POLICY "users_can_update_own_messages" ON public.messages
+  FOR UPDATE
+  USING (sender_id = (SELECT public.clerk_user_id()))
+  WITH CHECK (sender_id = (SELECT public.clerk_user_id()));
 
-CREATE POLICY "Users can mark messages as read"
-ON public.messages FOR UPDATE
-USING (
-    EXISTS (
-        SELECT 1 FROM public.conversations
-        WHERE id = conversations_id
-        AND (SELECT public.clerk_user_id()) IN (buyer_id, seller_id)
-    )
-)
-WITH CHECK (
-    -- Only allow marking messages from OTHERS as read
-    (SELECT public.clerk_user_id()) <> sender_id
-);
-
-CREATE POLICY "Users can delete messages in their conversations"
-ON public.messages FOR DELETE
-USING (
-    EXISTS (
-        SELECT 1 FROM public.conversations
-        WHERE id = conversations_id
-        AND (SELECT public.clerk_user_id()) IN (buyer_id, seller_id)
-    )
-);
+CREATE POLICY "users_can_delete_own_messages" ON public.messages
+  FOR DELETE
+  USING (sender_id = (SELECT public.clerk_user_id()));

@@ -34,7 +34,7 @@ export default function DynamicPostFields({ fields }: DynamicPostFieldsProps) {
       {/* Title Section */}
       <View style={styles.fieldSection}>
         <View style={styles.labelRow}>
-          <ThemedText style={styles.inputLabel}>Title</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t("fields.title")}</ThemedText>
           <ThemedText style={{ color: themeColors.primary }}>*</ThemedText>
         </View>
         <ThemedTextInput
@@ -55,7 +55,9 @@ export default function DynamicPostFields({ fields }: DynamicPostFieldsProps) {
       {/* Description Section */}
       <View style={styles.fieldSection}>
         <View style={styles.labelRow}>
-          <ThemedText style={styles.inputLabel}>Description</ThemedText>
+          <ThemedText style={styles.inputLabel}>
+            {t("productDetail.description")}
+          </ThemedText>
         </View>
         <ThemedTextInput
           style={[
