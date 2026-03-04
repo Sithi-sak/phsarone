@@ -23,6 +23,9 @@ export default function RootLayout() {
     "MiSansLatin-Medium": require("@src/assets/fonts/MiSansLatin-Medium.ttf"),
     "MiSansLatin-Semibold": require("@src/assets/fonts/MiSansLatin-Semibold.ttf"),
     "MiSansLatin-Bold": require("@src/assets/fonts/MiSansLatin-Bold.ttf"),
+    "KantumruyPro-Regular": require("@src/assets/fonts/KantumruyPro-Regular.ttf"),
+    "KantumruyPro-Semibold": require("@src/assets/fonts/KantumruyPro-SemiBold.ttf"),
+    "KantumruyPro-Bold": require("@src/assets/fonts/KantumruyPro-Bold.ttf"),
   });
 
   const loadSavedLanguage = useCallback(async () => {

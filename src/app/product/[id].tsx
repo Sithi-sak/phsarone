@@ -366,7 +366,7 @@ export default function ProductDetail() {
   };
 
   const activeFont =
-    i18n.language === "kh" ? undefined : "MiSansLatin-Normal";
+    i18n.language === "kh" ? "KantumruyPro-Regular" : "MiSansLatin-Normal";
   const productDetails = formatProductDetails(
     product.subCategory,
     product.details,

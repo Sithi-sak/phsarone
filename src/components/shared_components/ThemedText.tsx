@@ -46,10 +46,17 @@ export function ThemedText({ style, children, ...props }: TextProps) {
   const flattenedStyle = StyleSheet.flatten(style) || {};
   const fontWeight = flattenedStyle.fontWeight || "400";
 
-  // Use system font for Khmer (better OS integration), MiSans Latin for others
-  let fontFamily = useKhmer ? undefined : "MiSansLatin-Normal";
+  let fontFamily: string | undefined = "MiSansLatin-Normal";
 
-  if (!useKhmer) {
+  if (useKhmer) {
+    if (fontWeight === "bold" || fontWeight === "700" || fontWeight === "800" || fontWeight === "900") {
+      fontFamily = "KantumruyPro-Bold";
+    } else if (fontWeight === "600" || fontWeight === "500") {
+      fontFamily = "KantumruyPro-Semibold";
+    } else {
+      fontFamily = "KantumruyPro-Regular";
+    }
+  } else {
     if (fontWeight === "bold" || fontWeight === "700" || fontWeight === "800" || fontWeight === "900") {
       fontFamily = "MiSansLatin-Bold";
     } else if (fontWeight === "600") {
@@ -59,17 +66,16 @@ export function ThemedText({ style, children, ...props }: TextProps) {
     }
   }
 
-  // If using MiSans (Latin), we must handle fontWeight manually and set normal to the underlying Text
-  // If using system font (Khmer), we let the system handle the fontWeight natively
+  // When using custom font families, we handle the weight via the font name 
+  // and set the Text's fontWeight to 'normal' to avoid unwanted fallback behavior.
   const { fontWeight: _fw, ...restStyle } = flattenedStyle;
-  const finalFontWeight = useKhmer ? fontWeight : "normal";
 
   return (
     <Text
       style={[
         { color: themeColors.text },
-        useKhmer ? flattenedStyle : restStyle,
-        { fontFamily, fontWeight: finalFontWeight },
+        restStyle,
+        { fontFamily, fontWeight: "normal" }, 
       ]}
       {...props}
     >

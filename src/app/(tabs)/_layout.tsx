@@ -139,7 +139,7 @@ export default function TabLayout() {
   const { i18n, t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const activeFont =
-    i18n.language === "kh" ? undefined : "MiSansLatin-Medium";
+    i18n.language === "kh" ? "KantumruyPro-Regular" : "MiSansLatin-Medium";
   const iconSize = { home: 26, trade: 26, sell: 26, chat: 26, profile: 26 };
 
   return (
