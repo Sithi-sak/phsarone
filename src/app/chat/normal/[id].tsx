@@ -971,7 +971,6 @@ export default function NormalProductChatScreen() {
                 color: textColor,
                 fontSize: 15,
                 lineHeight: isKhmer ? 30 : 22,
-                fontFamily: isKhmer ? "khmer-regular" : undefined,
                 includeFontPadding: false,
                 textAlignVertical: "center",
               }}

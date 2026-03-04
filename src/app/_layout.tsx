@@ -19,10 +19,10 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const [languageLoaded, setLanguageLoaded] = useState(false);
   const [loaded, error] = useFonts({
-    Geist: require("@src/assets/fonts/Geist-VariableFont_wght.ttf"),
-    NotoSerifKhmer: require("@src/assets/fonts/NotoSerifKhmer-VariableFont_wdth,wght.ttf"),
-    "khmer-regular": require("@src/assets/fonts/KantumruyPro-Regular.ttf"),
-    "khmer-KantumruyPro-Bold": require("@src/assets/fonts/KantumruyPro-Bold.ttf"),
+    "MiSansLatin-Normal": require("@src/assets/fonts/MiSansLatin-Normal.ttf"),
+    "MiSansLatin-Medium": require("@src/assets/fonts/MiSansLatin-Medium.ttf"),
+    "MiSansLatin-Semibold": require("@src/assets/fonts/MiSansLatin-Semibold.ttf"),
+    "MiSansLatin-Bold": require("@src/assets/fonts/MiSansLatin-Bold.ttf"),
   });
 
   const loadSavedLanguage = useCallback(async () => {

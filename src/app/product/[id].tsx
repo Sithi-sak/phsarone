@@ -365,7 +365,8 @@ export default function ProductDetail() {
     return null;
   };
 
-  const activeFont = i18n.language === "kh" ? "khmer-regular" : "Oxygen";
+  const activeFont =
+    i18n.language === "kh" ? undefined : "MiSansLatin-Normal";
   const productDetails = formatProductDetails(
     product.subCategory,
     product.details,
