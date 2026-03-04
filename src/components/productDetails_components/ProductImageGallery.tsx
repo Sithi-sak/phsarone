@@ -1,4 +1,5 @@
 import useThemeColor from "@src/hooks/useThemeColor";
+import { getOptimizedStorageImageUrl } from "@src/utils/storageImage";
 import React, { useState } from "react";
 import {
   Dimensions,
@@ -36,9 +37,14 @@ const ProductImageGallery: React.FC<ProductImageGalleryProps> = ({
         },
       ]}
     >
-      <Image source={{ uri: item }} style={styles.thumbnailImage} />
+      <Image
+        source={{ uri: getOptimizedStorageImageUrl(item, "thumb") }}
+        style={styles.thumbnailImage}
+      />
     </TouchableOpacity>
   );
+
+  const selectedPhoto = photos[selectedImageIndex] || "";
 
   return (
     <View
@@ -48,7 +54,7 @@ const ProductImageGallery: React.FC<ProductImageGalleryProps> = ({
       ]}
     >
       <Image
-        source={{ uri: photos[selectedImageIndex] }}
+        source={{ uri: getOptimizedStorageImageUrl(selectedPhoto, "detail") }}
         style={styles.mainImage}
         resizeMode="cover"
       />

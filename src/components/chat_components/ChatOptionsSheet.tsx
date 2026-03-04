@@ -1,4 +1,5 @@
 import { ThemedText } from "@src/components/shared_components/ThemedText";
+import useThemeColor from "@src/hooks/useThemeColor";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Modal, Pressable, TouchableOpacity, View } from "react-native";
@@ -8,11 +9,13 @@ export default function ChatOptionsSheet({
   onClose,
   onMute,
   onBlock,
-  themeColors,
+  themeColors: propsThemeColors,
   isMuted,
   otherUserName,
 }: any) {
   const { t } = useTranslation();
+  const hookThemeColors = useThemeColor();
+  const themeColors = propsThemeColors || hookThemeColors;
 
   const handleMutePress = async () => {
     try {

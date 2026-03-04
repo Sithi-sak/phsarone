@@ -43,7 +43,8 @@ export function usePostProduct() {
         .from("product-images")
         .upload(fileName, decode(base64), {
           contentType: "image/jpeg",
-          upsert: true
+          cacheControl: "31536000",
+          upsert: true,
         });
 
       if (uploadError) throw uploadError;

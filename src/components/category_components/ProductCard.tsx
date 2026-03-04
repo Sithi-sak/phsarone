@@ -4,6 +4,7 @@ import useThemeColor from "@/src/hooks/useThemeColor";
 import { Product } from "@/src/types/productTypes";
 import { getLocalizedLocationName } from "@/src/utils/locationUtils";
 import { formatPrice, formatTimeAgo } from "@/src/utils/productUtils";
+import { getOptimizedStorageImageUrl } from "@/src/utils/storageImage";
 import { toCamelCase } from "@/src/utils/stringUtils";
 import { Ionicons } from "@expo/vector-icons";
 import { MapPinIcon } from "phosphor-react-native";
@@ -27,7 +28,10 @@ export default function ProductCard({ product, onPress }: ProductCardProps) {
   };
 
   const timeAgo = formatTimeAgo(product.createdAt, t);
-  const mainImage = product.photos[0] || "https://via.placeholder.com/300";
+  const mainImage = getOptimizedStorageImageUrl(
+    product.photos[0] || "https://via.placeholder.com/300",
+    "card",
+  );
 
   // Calculate if there's a discount
   const hasDiscount = product.discountType && product.discountType !== "none";

@@ -1,3 +1,4 @@
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import AddressDropdowns from "@src/components/shared_components/AddressDropdowns";
 import DynamicPhosphorIcon from "@src/components/shared_components/DynamicPhosphorIcon";
 import LocationPickerMap from "@src/components/shared_components/LocationPickerMap";
@@ -10,7 +11,10 @@ import { Colors } from "@src/constants/Colors";
 import { useTradeDraft } from "@src/context/TradeDraftContext";
 import { useTradeProducts } from "@src/context/TradeProductsContext";
 import useThemeColor from "@src/hooks/useThemeColor";
-import { useRouter } from "expo-router";
+import { createClerkSupabaseClient } from "@src/lib/supabase";
+import { decode } from "base64-arraybuffer";
+import * as FileSystem from "expo-file-system/legacy";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { XIcon } from "phosphor-react-native";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,7 +34,12 @@ export default function AddTradeProductScreen() {
   const themeColors = useThemeColor();
   const { t } = useTranslation();
   const { draft, updateDraft, resetDraft } = useTradeDraft();
-  const { addProduct } = useTradeProducts();
+  const { refreshProducts } = useTradeProducts();
+  const { getToken, userId } = useAuth();
+  const { user } = useUser();
+  const { isPrivate, targetUserId, tradeId } = useLocalSearchParams<{ isPrivate: string; targetUserId: string; tradeId: string }>();
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Product Information
   const [title, setTitle] = useState("");
@@ -87,6 +96,44 @@ export default function AddTradeProductScreen() {
     setPhoneNumbers(newPhoneNumbers);
   };
 
+  const uploadTradeImage = async (uri: string, supabaseClient: any) => {
+    if (uri.startsWith("http")) {
+      return uri;
+    }
+
+    if (!userId) {
+      throw new Error("User must be authenticated to upload images.");
+    }
+
+    const ext = uri.split(".").pop()?.toLowerCase().split("?")[0] || "jpg";
+    const ext = uri.split(".").pop()?.toLowerCase().split("?")[0] || "jpg";
+    const fileName = `${userId}/trade-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: "base64",
+    });
+
+    const contentType = ext === "png" ? "image/png" : "image/jpeg";
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from("product-images")
+      .upload(fileName, decode(base64), {
+        contentType,
+        cacheControl: "31536000",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabaseClient.storage.from("product-images").getPublicUrl(fileName);
+
+    return publicUrl;
+  };
+
   const validateForm = () => {
     if (!title.trim()) {
       Alert.alert(t("error"), t("trade.alerts.title_required"));
@@ -105,16 +152,15 @@ export default function AddTradeProductScreen() {
       return false;
     }
     if (!lookingForName.trim()) {
-      Alert.alert(
-        t("error"),
-        t("trade.alerts.looking_for_required"),
-      );
+      Alert.alert(t("error"), t("trade.alerts.looking_for_required"));
+      Alert.alert(t("error"), t("trade.alerts.looking_for_required"));
       return false;
     }
     if (!estimatedMinValue.trim() || !estimatedMaxValue.trim()) {
       Alert.alert(t("error"), t("trade.alerts.value_range_required"));
       return false;
     }
+
     const minVal = parseFloat(estimatedMinValue);
     const maxVal = parseFloat(estimatedMaxValue);
     if (isNaN(minVal) || isNaN(maxVal)) {
@@ -122,10 +168,8 @@ export default function AddTradeProductScreen() {
       return false;
     }
     if (minVal > maxVal) {
-      Alert.alert(
-        t("error"),
-        t("trade.alerts.min_greater_than_max"),
-      );
+      Alert.alert(t("error"), t("trade.alerts.min_greater_than_max"));
+      Alert.alert(t("error"), t("trade.alerts.min_greater_than_max"));
       return false;
     }
     if (!draft.province || !draft.district) {
@@ -136,10 +180,18 @@ export default function AddTradeProductScreen() {
       Alert.alert(t("error"), t("trade.alerts.map_confirm_required"));
       return false;
     }
-    if (phoneNumbers.length === 0) {
+
+    const hasAtLeastOnePhone = phoneNumbers.some(
+      (phone) => phone.trim().length > 0,
+    );
+    const hasAtLeastOnePhone = phoneNumbers.some(
+      (phone) => phone.trim().length > 0,
+    );
+    if (!hasAtLeastOnePhone) {
       Alert.alert(t("error"), t("trade.alerts.phone_required"));
       return false;
     }
+
     return true;
   };
 
@@ -148,64 +200,131 @@ export default function AddTradeProductScreen() {
       return;
     }
 
-    // Convert province to camelCase format
-    const provinceKey =
-      draft.province
-        ?.replace(/\s+/g, "")
-        .replace(/^./, (str) => str.toLowerCase()) || "phnomPenh";
+    if (!userId) {
+      Alert.alert(
+        t("common.sign_in_required"),
+        t("common.sign_in_to_bookmark"),
+      );
+      Alert.alert(
+        t("common.sign_in_required"),
+        t("common.sign_in_to_bookmark"),
+      );
+      return;
+    }
 
-    // Convert condition to lowercase
-    const conditionLower = condition.toLowerCase().replace(/\s+/g, "_");
-
-    // Create new trade product matching the expected format
-    const newProduct = {
-      id: Date.now().toString(),
-      images: draft.photos,
-      title: title.trim(),
-      seller: "Current User",
-      timeAgo: { value: 0, unit: "minutes" as "minutes" },
-      lookingFor: [
-        {
-          name: lookingForName.trim(),
-          description: lookingForDescription.trim(),
-        },
-      ],
-      condition: conditionLower,
-      originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
-      province: provinceKey,
-      district: draft.district || "",
-      commune: draft.commune || "",
-      coordinates: draft.location,
-      description: description.trim(),
-      telephone: phoneNumbers.join(", "),
-      estimatedTradeValueRange: `$${estimatedMinValue} - $${estimatedMaxValue}`,
-      owner: {
-        name: "Current User",
-        isVerified: false,
-        avatar: "https://via.placeholder.com/150",
-      },
-      postedDate: new Date().toISOString(),
-    };
+    setIsSubmitting(true);
 
     try {
-      addProduct(newProduct);
+      const token = await getToken();
+      const authSupabase = createClerkSupabaseClient(token);
 
-      Alert.alert(
-        t("success"),
-        t("trade.alerts.post_success"),
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              resetDraft();
-              router.back();
+      const uploadedImages = await Promise.all(
+        draft.photos.map((uri) => uploadTradeImage(uri, authSupabase)),
+      );
+
+      const provinceKey =
+        draft.province
+          ?.replace(/\s+/g, "")
+          .replace(/^./, (str) => str.toLowerCase()) || "phnomPenh";
+
+      const conditionLower = condition.toLowerCase().replace(/\s+/g, "_");
+
+      const normalizedPhones = phoneNumbers
+        .map((phone) => phone.trim())
+        .filter(Boolean);
+
+      const ownerName =
+        user?.fullName ||
+        user?.username ||
+        user?.primaryEmailAddress?.emailAddress ||
+        "Current User";
+
+      const estimatedRange = `$${estimatedMinValue} - $${estimatedMaxValue}`;
+
+      const isPrivatePost = isPrivate === "true";
+
+      const { data: newTrade, error } = await authSupabase
+        .from("trades")
+        .insert({
+          owner_id: userId,
+          title: title.trim(),
+          description: description.trim(),
+          images: uploadedImages,
+          looking_for: lookingForName.trim(),
+          location_name: draft.province || null,
+          cash_adjustment: 0,
+          is_private: isPrivatePost,
+          target_user_id: targetUserId || null,
+          metadata: {
+            sellerName: ownerName,
+            condition: conditionLower,
+            originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
+            province: provinceKey,
+            district: draft.district || "",
+            commune: draft.commune || "",
+            coordinates: draft.location,
+            telephone: normalizedPhones.join(" / "),
+            estimatedTradeValueRange: estimatedRange,
+            lookingForName: lookingForName.trim(),
+            lookingForDescription: lookingForDescription.trim(),
+            owner: {
+              name: ownerName,
+              isVerified: false,
+              avatar: user?.imageUrl || "",
             },
           },
-        ],
-      );
+          status: isPrivatePost ? "private" : "active",
+        })
+        .select("id")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // If we are creating a private offer for a specific trade, create the offer too
+      if (isPrivatePost && tradeId && newTrade) {
+        const { error: offerError } = await authSupabase
+          .from("trade_offers")
+          .insert({
+            trade_id: tradeId,
+            bidder_id: userId,
+            offered_trade_id: newTrade.id,
+            offered_item_desc: title.trim(),
+            status: "pending",
+          });
+
+        if (offerError) {
+          console.error("Error creating trade offer:", offerError);
+          // Don't throw, we successfully created the trade post at least
+        }
+      }
+
+      await refreshProducts();
+
+      Alert.alert(t("success"), t("trade.alerts.post_success"), [
+        {
+          text: "OK",
+          onPress: () => {
+            resetDraft();
+            router.back();
+          },
+        },
+      ]);
+      Alert.alert(t("success"), t("trade.alerts.post_success"), [
+        {
+          text: "OK",
+          onPress: () => {
+            resetDraft();
+            router.back();
+          },
+        },
+      ]);
     } catch (error) {
-      console.error("Error posting product:", error);
+      console.error("Error posting trade product:", error);
       Alert.alert(t("error"), t("trade.alerts.post_failed"));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -280,7 +399,7 @@ export default function AddTradeProductScreen() {
             />
 
             {/* Condition */}
-            <View>
+            <View style={styles.condition_sec}>
               <ThemedText
                 style={[{ fontSize: 14, fontWeight: "500", marginBottom: 8 }]}
               >
@@ -338,6 +457,7 @@ export default function AddTradeProductScreen() {
             />
 
             <ThemedText style={[styles.sectionTitle, { marginTop: 20 }]}>
+            <ThemedText style={[styles.sectionTitle, { marginTop: 20 }]}>
               {t("trade.estimated_trade_value_range")} *
             </ThemedText>
             <ThemedText style={styles.sectionSubtitle}>
@@ -345,6 +465,7 @@ export default function AddTradeProductScreen() {
             </ThemedText>
 
             <View style={styles.valueRangeContainer}>
+              <View style={[styles.valueInputWrapper, { flex: 1 }]}>
               <View style={[styles.valueInputWrapper, { flex: 1 }]}>
                 <ThemedText
                   style={[{ fontSize: 14, fontWeight: "500", marginBottom: 8 }]}
@@ -372,6 +493,7 @@ export default function AddTradeProductScreen() {
                 <ThemedText style={styles.rangeSeparatorText}></ThemedText>
               </View>
 
+              <View style={[styles.valueInputWrapper, { flex: 1 }]}>
               <View style={[styles.valueInputWrapper, { flex: 1 }]}>
                 <ThemedText
                   style={[{ fontSize: 14, fontWeight: "500", marginBottom: 8 }]}
@@ -497,11 +619,19 @@ export default function AddTradeProductScreen() {
 
           {/* Submit Button */}
           <TouchableOpacity
-            style={[styles.submitButton, { backgroundColor: Colors.reds[500] }]}
+            style={[
+              styles.submitButton,
+              {
+                backgroundColor: isSubmitting
+                  ? Colors.reds[300]
+                  : Colors.reds[500],
+              },
+            ]}
             onPress={handleSubmit}
+            disabled={isSubmitting}
           >
             <ThemedText style={styles.submitButtonText}>
-              {t("trade.post_trade_product")}
+              {isSubmitting ? t("chat.sending") : t("trade.post_trade_product")}
             </ThemedText>
           </TouchableOpacity>
 
@@ -548,6 +678,9 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
+  },
+  condition_sec: {
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,

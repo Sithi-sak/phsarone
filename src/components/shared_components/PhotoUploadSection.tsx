@@ -38,6 +38,7 @@ export default function PhotoUploadSection({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: 5 - photos.length,
+      quality: 0.7,
     });
     if (!result.canceled) {
       onUpdatePhotos(

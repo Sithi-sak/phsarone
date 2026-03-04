@@ -1,4 +1,5 @@
 import { ThemedText } from "@src/components/shared_components/ThemedText";
+import { getOptimizedStorageImageUrl } from "@src/utils/storageImage";
 import {
   CaretDownIcon,
   CaretUpIcon,
@@ -20,6 +21,9 @@ export default function ProductCard({
   const [collapsed, setCollapsed] = useState(false);
   if (!title) return null;
   const hasPrice = price && price !== "0" && price !== "";
+  const optimizedThumbnail = thumbnail
+    ? getOptimizedStorageImageUrl(thumbnail, "thumb")
+    : "";
 
   if (collapsed) {
     return (
@@ -46,7 +50,7 @@ export default function ProductCard({
       >
         {thumbnail ? (
           <Image
-            source={{ uri: thumbnail }}
+            source={{ uri: optimizedThumbnail }}
             style={{ width: 24, height: 24, borderRadius: 6 }}
           />
         ) : (
@@ -105,7 +109,7 @@ export default function ProductCard({
       >
         {thumbnail ? (
           <Image
-            source={{ uri: thumbnail }}
+            source={{ uri: optimizedThumbnail }}
             style={{ width: "100%", height: 160 }}
             resizeMode="cover"
           />

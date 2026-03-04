@@ -3,6 +3,8 @@ import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
+  useAudioPlayer,
+  useAudioPlayerStatus,
   useAudioRecorder,
   useAudioRecorderState,
 } from "expo-audio";
@@ -10,11 +12,15 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
+  CheckIcon,
+  ChecksIcon,
   ImageIcon,
   MapPinIcon,
   MicrophoneIcon,
   PaperPlaneTiltIcon,
   PlusIcon,
+  ShoppingBagIcon,
+  StopIcon,
   XIcon,
 } from "phosphor-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -25,16 +31,17 @@ import {
   Alert,
   Animated,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
+  Pressable,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import Bubble from "@src/components/chat_components/Bubble";
 import ChatHeader from "@src/components/chat_components/ChatHeader";
 import ChatInputBar from "@src/components/chat_components/ChatInputBar";
 import ChatOptionsSheet from "@src/components/chat_components/ChatOptionsSheet";
@@ -43,7 +50,311 @@ import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { Colors } from "@src/constants/Colors";
 import { Message, useChat } from "@src/hooks/useChat";
 import useThemeColor from "@src/hooks/useThemeColor";
-import { formatDuration, parseContent } from "@src/utils/chatUtils";
+import { getOptimizedStorageImageUrl } from "@src/utils/storageImage";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDuration(sec: number) {
+  const m = Math.floor(sec / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = Math.floor(sec % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function parseContent(raw: any): { type: string; [k: string]: any } {
+  if (!raw) return { type: "text", text: "" };
+  if (typeof raw === "string") {
+    try {
+      const p = JSON.parse(raw);
+      if (p && typeof p === "object") return p;
+    } catch {}
+    return { type: "text", text: raw };
+  }
+  return typeof raw === "object" ? raw : { type: "text", text: String(raw) };
+}
+
+// ─── Voice Player ─────────────────────────────────────────────────────────────
+
+function VoicePlayer({
+  url,
+  duration,
+  isMe,
+}: {
+  url: string;
+  duration?: number;
+  isMe: boolean;
+}) {
+  const player = useAudioPlayer({ uri: url }, { updateInterval: 200 });
+  const status = useAudioPlayerStatus(player);
+  const playing = status.playing;
+  const progress =
+    status.duration > 0 ? status.currentTime / status.duration : 0;
+
+  const toggle = async () => {
+    try {
+      if (playing) {
+        player.pause();
+        return;
+      }
+      if (status.didJustFinish) await player.seekTo(0);
+      player.play();
+    } catch (e) {
+      console.error("Voice error:", e);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={toggle}
+      style={styles.voiceRow}
+      activeOpacity={0.8}
+    >
+      <View
+        style={[
+          styles.voiceBtn,
+          {
+            backgroundColor: isMe ? "rgba(255,255,255,0.25)" : Colors.reds[500],
+          },
+        ]}
+      >
+        {playing ? (
+          <StopIcon size={13} color="#fff" weight="fill" />
+        ) : (
+          <MicrophoneIcon size={13} color="#fff" weight="fill" />
+        )}
+      </View>
+      <View
+        style={[
+          styles.voiceTrack,
+          { backgroundColor: isMe ? "rgba(255,255,255,0.3)" : "#E5E7EB" },
+        ]}
+      >
+        <View
+          style={[
+            styles.voiceFill,
+            {
+              width: `${progress * 100}%`,
+              backgroundColor: isMe ? "#fff" : Colors.reds[500],
+            },
+          ]}
+        />
+      </View>
+      <ThemedText
+        style={{ color: isMe ? "#fff" : "#6B7280", fontSize: 12, minWidth: 34 }}
+      >
+        {formatDuration(duration || Math.round(status.duration || 0))}
+      </ThemedText>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Message Bubble ───────────────────────────────────────────────────────────
+
+function Bubble({
+  item,
+  isMe,
+  themeColors,
+  isOptimistic,
+  isLastFromMe,
+  isRead,
+  onLongPress,
+}: {
+  item: Message;
+  isMe: boolean;
+  themeColors: any;
+  isOptimistic: boolean;
+  isLastFromMe: boolean;
+  isRead: boolean;
+  onLongPress: () => void;
+}) {
+  const content = parseContent(item.content);
+  const bubbleBg = isMe ? Colors.reds[500] : themeColors.card;
+  const textColor = isMe ? "#fff" : themeColors.text;
+  const { t } = useTranslation();
+  const inner = () => {
+    switch (content.type) {
+      case "image":
+        return (
+          <Image
+            source={{ uri: getOptimizedStorageImageUrl(content.url, "chat") }}
+            style={styles.imgMsg}
+            resizeMode="cover"
+          />
+        );
+
+      case "location":
+        return (
+          <TouchableOpacity
+            style={styles.locRow}
+            onPress={() => {
+              const u = Platform.select({
+                ios: `maps:?q=${content.label || "Location"}&ll=${content.latitude},${content.longitude}`,
+                android: `geo:${content.latitude},${content.longitude}?q=${content.label || "Location"}`,
+              });
+              if (u) Linking.openURL(u);
+            }}
+          >
+            <MapPinIcon
+              size={18}
+              color={isMe ? "#fff" : Colors.reds[500]}
+              weight="fill"
+            />
+            <ThemedText
+              style={{ color: textColor, fontSize: 14, marginLeft: 6, flex: 1 }}
+              numberOfLines={2}
+            >
+              {content.label ||
+                `${Number(content.latitude).toFixed(4)}, ${Number(content.longitude).toFixed(4)}`}
+            </ThemedText>
+          </TouchableOpacity>
+        );
+
+      case "voice":
+        return (
+          <VoicePlayer
+            url={content.url}
+            duration={content.duration}
+            isMe={isMe}
+          />
+        );
+
+      default: {
+        const text =
+          content.text ||
+          content.message ||
+          (typeof item.content === "string" ? item.content : "");
+        return (
+          <ThemedText
+            style={{ color: textColor, fontSize: 15, lineHeight: 22 }}
+          >
+            {text}
+          </ThemedText>
+        );
+      }
+    }
+  };
+
+  return (
+    <View
+      style={[
+        styles.msgWrap,
+        isMe ? styles.myWrap : styles.otherWrap,
+        isOptimistic && { opacity: 0.6 },
+      ]}
+    >
+      <Pressable
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        style={[
+          styles.bubble,
+          isMe ? styles.myBubble : styles.otherBubble,
+          { backgroundColor: bubbleBg },
+          content.type === "image" && styles.imgBubble,
+        ]}
+      >
+        {inner()}
+      </Pressable>
+
+      {/* Time + seen status */}
+      <View style={styles.metaRow}>
+        <ThemedText
+          style={[styles.msgTime, { color: themeColors.text + "55" }]}
+        >
+          {isOptimistic
+            ? t("chat.sending")
+            : new Date(item.created_at || "").toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+        </ThemedText>
+        {isMe && isLastFromMe && (
+          <View style={{ marginLeft: 4 }}>
+            {isRead ? (
+              <ChecksIcon size={14} color={Colors.reds[500]} weight="bold" />
+            ) : (
+              <CheckIcon
+                size={14}
+                color={themeColors.text + "55"}
+                weight="bold"
+              />
+            )}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─── Product Banner ───────────────────────────────────────────────────────────
+
+function ProductBanner({
+  title,
+  thumbnail,
+  price,
+  currency,
+  themeColors,
+  onPress,
+}: {
+  title?: string;
+  thumbnail?: string;
+  price?: string;
+  currency?: string;
+  themeColors: any;
+  onPress?: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!title) return null;
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.8}
+      style={[
+        styles.productBanner,
+        {
+          backgroundColor: themeColors.card,
+          borderBottomColor: themeColors.border + "30",
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.productBannerIcon,
+          { backgroundColor: Colors.reds[500] + "18" },
+        ]}
+      >
+        {thumbnail ? (
+          <Image
+            source={{ uri: getOptimizedStorageImageUrl(thumbnail, "thumb") }}
+            style={styles.productThumb}
+          />
+        ) : (
+          <ShoppingBagIcon size={20} color={Colors.reds[500]} weight="fill" />
+        )}
+      </View>
+      <View style={{ flex: 1 }}>
+        <ThemedText
+          style={[styles.productBannerTitle, { color: themeColors.text }]}
+          numberOfLines={1}
+        >
+          {title}
+        </ThemedText>
+        {price ? (
+          <ThemedText style={styles.productBannerPrice}>
+            {currency || "USD"} {price}
+          </ThemedText>
+        ) : null}
+      </View>
+      <ThemedText
+        style={{ color: Colors.reds[500], fontSize: 12, fontWeight: "600" }}
+      >
+        {t("common.viewAll")}
+      </ThemedText>
+    </TouchableOpacity>
+  );
+}
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -238,7 +549,7 @@ export default function TradeProductChatScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.75,
+      quality: 0.65,
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
@@ -339,31 +650,6 @@ export default function TradeProductChatScreen() {
     await toggleMuteConversation();
   };
 
-  const handleBlock = () => {
-    Alert.alert(
-      t("chat.block_user_title"),
-      t("chat.block_user_confirmation", {
-        userName: otherUser?.first_name || "this user",
-      }),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("chat.block"),
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await blockUser(otherUser?.id || "");
-              Alert.alert(t("chat.block"), t("chat.user_blocked_successfully"));
-              router.back();
-            } catch (e: any) {
-              Alert.alert(t("error"), e.message);
-            }
-          },
-        },
-      ],
-    );
-  };
-
   const handleCall = () => {
     if (otherUser?.phone) {
       Linking.openURL(`tel:${otherUser.phone}`);
@@ -378,7 +664,7 @@ export default function TradeProductChatScreen() {
       <View
         style={[styles.centered, { backgroundColor: themeColors.background }]}
       >
-        <ActivityIndicator size="large" color={Colors.reds[500]} />
+        <ActivityIndicator size="small" color={Colors.reds[500]} />
       </View>
     );
   }
@@ -639,7 +925,15 @@ export default function TradeProductChatScreen() {
         visible={showOptionsMenu}
         onClose={() => setShowOptionsMenu(false)}
         onMute={handleToggleMute}
-        onBlock={handleBlock}
+        onBlock={async () => {
+          try {
+            await blockUser(otherUser?.id || "");
+            Alert.alert(t("chat.block"), t("chat.user_blocked_successfully"));
+            router.back();
+          } catch (e: any) {
+            Alert.alert(t("error"), e.message);
+          }
+        }}
         isMuted={isMuted}
         themeColors={themeColors}
         otherUserName={otherUser?.first_name || "User"}

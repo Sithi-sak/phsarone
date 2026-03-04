@@ -15,12 +15,14 @@ async function handleBlock(req: Request) {
   const token = authHeader.split(' ')[1];
   if (!token) return new Response(JSON.stringify({ error: 'missing auth token' }), { status: 401 });
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser(token as string);
-  if (userErr || !userData?.user) {
-    console.error('auth error', userErr);
+  let blocker_id: string;
+  try {
+    const [_header, payload, _signature] = token.split('.');
+    const decodedPayload = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    blocker_id = decodedPayload.sub;
+  } catch (e) {
     return new Response(JSON.stringify({ error: 'invalid auth token' }), { status: 401 });
   }
-  const blocker_id = userData.user.id;
 
   if (!blocker_id || !blocked_id) {
     return new Response(JSON.stringify({ error: 'missing blocker_id or blocked_id' }), { status: 400 });
@@ -42,6 +44,88 @@ async function handleBlock(req: Request) {
   });
 }
 
+async function handleUnblock(req: Request) {
+  const body = await req.json().catch(() => ({}));
+  const blocked_id = body.blocked_id;
+
+  const authHeader = req.headers.get('authorization') || '';
+  const token = authHeader.split(' ')[1];
+  if (!token) return new Response(JSON.stringify({ error: 'missing auth token' }), { status: 401 });
+
+  let blocker_id: string;
+  try {
+    const [_header, payload, _signature] = token.split('.');
+    const decodedPayload = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    blocker_id = decodedPayload.sub;
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'invalid auth token' }), { status: 401 });
+  }
+
+  if (!blocker_id || !blocked_id) {
+    return new Response(JSON.stringify({ error: 'missing blocker_id or blocked_id' }), { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from('blocked_users')
+    .delete()
+    .eq('blocker_id', blocker_id)
+    .eq('blocked_id', blocked_id);
+
+  if (error) {
+    console.error('unblock error', error);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  }
+
+  return new Response(JSON.stringify({ success: true }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+async function handleCheckBlock(req: Request) {
+  const body = await req.json().catch(() => ({}));
+  const other_user_id = body.other_user_id;
+
+  const authHeader = req.headers.get('authorization') || '';
+  const token = authHeader.split(' ')[1];
+  if (!token) return new Response(JSON.stringify({ error: 'missing auth token' }), { status: 401 });
+
+  let my_id: string;
+  try {
+    const [_header, payload, _signature] = token.split('.');
+    const decodedPayload = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    my_id = decodedPayload.sub;
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'invalid auth token' }), { status: 401 });
+  }
+
+  if (!my_id || !other_user_id) {
+    return new Response(JSON.stringify({ error: 'missing ids' }), { status: 400 });
+  }
+
+  // Check if I blocked them
+  const { data: iBlocked, error: err1 } = await supabase
+    .from('blocked_users')
+    .select('id')
+    .eq('blocker_id', my_id)
+    .eq('blocked_id', other_user_id)
+    .maybeSingle();
+
+  // Check if they blocked me
+  const { data: theyBlocked, error: err2 } = await supabase
+    .from('blocked_users')
+    .select('id')
+    .eq('blocker_id', other_user_id)
+    .eq('blocked_id', my_id)
+    .maybeSingle();
+
+  return new Response(JSON.stringify({
+    isBlockedByMe: !!iBlocked,
+    isBlockedByThem: !!theyBlocked,
+  }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 async function handleMute(req: Request, convId: string) {
   const body = await req.json().catch(() => ({}));
   const muted = typeof body.muted === 'boolean' ? body.muted : true;
@@ -51,12 +135,14 @@ async function handleMute(req: Request, convId: string) {
   const token = authHeader.split(' ')[1];
   if (!token) return new Response(JSON.stringify({ error: 'missing auth token' }), { status: 401 });
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser(token as string);
-  if (userErr || !userData?.user) {
-    console.error('auth error', userErr);
+  let requester_id: string;
+  try {
+    const [_header, payload, _signature] = token.split('.');
+    const decodedPayload = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    requester_id = decodedPayload.sub;
+  } catch (e) {
     return new Response(JSON.stringify({ error: 'invalid auth token' }), { status: 401 });
   }
-  const requester_id = userData.user.id;
 
   const { data: conv, error: gerr } = await supabase
     .from('conversations')
@@ -95,6 +181,14 @@ Deno.serve(async (req) => {
 
     if (req.method === 'POST' && pathname.endsWith('/block')) {
       return await handleBlock(req);
+    }
+
+    if (req.method === 'POST' && pathname.endsWith('/unblock')) {
+      return await handleUnblock(req);
+    }
+
+    if (req.method === 'POST' && pathname.endsWith('/check-block')) {
+      return await handleCheckBlock(req);
     }
 
     // mute: PATCH /mute/:conversation_id or /conversations/:id/mute

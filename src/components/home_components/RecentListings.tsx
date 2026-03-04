@@ -49,6 +49,8 @@ export default function RecentListings({
     );
   };
 
+  const showPlaceholder = products.length % 2 === 1;
+
   return (
     <View style={styles.container}>
       <ThemedText style={styles.title}>
@@ -60,6 +62,9 @@ export default function RecentListings({
             {renderProduct(item)}
           </View>
         ))}
+        {showPlaceholder && (
+          <View style={[styles.productItem, styles.placeholder]} />
+        )}
       </View>
     </View>
   );
@@ -88,5 +93,8 @@ const styles = StyleSheet.create({
   },
   productItem: {
     width: "49%",
+  },
+  placeholder: {
+    opacity: 0,
   },
 });

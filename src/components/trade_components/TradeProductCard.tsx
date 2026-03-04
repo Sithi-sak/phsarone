@@ -1,19 +1,8 @@
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
-import {
-  ClockIcon,
-  MagnifyingGlassIcon,
-  MapPinIcon,
-  UserIcon,
-} from "phosphor-react-native";
+import { ClockIcon, MapPinIcon } from "phosphor-react-native";
 import { useTranslation } from "react-i18next";
-import {
-  Dimensions,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
 interface TradeProduct {
   id: string;
@@ -31,9 +20,6 @@ interface TradeProductCardProps {
   onPress: () => void;
 }
 
-const { width } = Dimensions.get("window");
-const CARD_WIDTH = (width - 38) / 2;
-
 export default function TradeProductCard({
   product,
   onPress,
@@ -42,6 +28,13 @@ export default function TradeProductCard({
   const { t } = useTranslation();
 
   const styles = getStyles(themeColors);
+  const conditionKey = product.condition.toLowerCase().replace(/\s+/g, "_");
+  const conditionLabel = t(`condition.${conditionKey}`, {
+    defaultValue: product.condition,
+  });
+  const sellerLabel = product.seller.toLowerCase().startsWith("by ")
+    ? product.seller
+    : `By ${product.seller}`;
 
   return (
     <TouchableOpacity
@@ -50,63 +43,51 @@ export default function TradeProductCard({
         { backgroundColor: themeColors.card, borderColor: themeColors.border },
       ]}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.9}
     >
-      {/* Product Image and Condition Badge */}
       <View style={styles.imageWrapper}>
-        <Image source={{ uri: product.image }} style={styles.productImage} />
-        {product.condition && (
-          <View
-            style={[
-              styles.conditionBadge,
-              { backgroundColor: themeColors.error },
-            ]}
-          >
-            <ThemedText style={styles.conditionText}>
-              {t(`trade_screen.condition_${product.condition.toLowerCase()}`)}
+        {product.image ? (
+          <Image source={{ uri: product.image }} style={styles.productImage} />
+        ) : (
+          <View style={styles.imagePlaceholder} />
+        )}
+        {product.condition ? (
+          <View style={styles.conditionBadge}>
+            <ThemedText style={styles.conditionText} numberOfLines={1}>
+              {conditionLabel}
             </ThemedText>
           </View>
-        )}
+        ) : null}
       </View>
-      {/* Product Info */}
+
       <View style={styles.infoContainer}>
         <ThemedText style={styles.productTitle} numberOfLines={1}>
           {product.title}
         </ThemedText>
-        {/* Seller Info */}
+        <ThemedText style={styles.sellerText} numberOfLines={1}>
+          {sellerLabel}
+        </ThemedText>
+
         <View style={styles.metaRow}>
-          <UserIcon size={14} color={themeColors.text} weight="fill" />
-          <ThemedText style={styles.metaText}>{product.seller}</ThemedText>
-        </View>
-        <View style={styles.metaRow}>
-          <ClockIcon size={14} color={themeColors.text} weight="fill" />
-          <ThemedText style={styles.metaText}>{product.timeAgo}</ThemedText>
+          <ClockIcon size={12} color={themeColors.text} />
+          <ThemedText style={styles.metaText} numberOfLines={1}>
+            {product.timeAgo}
+          </ThemedText>
           <MapPinIcon
-            size={14}
+            size={12}
             color={themeColors.text}
-            weight="fill"
             style={styles.locationIcon}
           />
-          <ThemedText style={styles.metaText}>{product.location}</ThemedText>
+          <ThemedText style={styles.metaText} numberOfLines={1}>
+            {product.location}
+          </ThemedText>
         </View>
-        {/* Looking For */}
-        <View
-          style={[
-            styles.lookingForContainer,
-            { backgroundColor: themeColors.secondaryBackground },
-          ]}
-        >
-          <View style={styles.lookingForHeader}>
-            <MagnifyingGlassIcon
-              size={14}
-              color={themeColors.text}
-              weight="fill"
-            />
-            <ThemedText style={styles.lookingForLabel}>
-              {t("trade_screen.looking_for")}
-            </ThemedText>
-          </View>
-          <ThemedText style={styles.lookingForText}>
+
+        <View style={styles.lookingForContainer}>
+          <ThemedText style={styles.lookingForLabel} numberOfLines={1}>
+            {t("trade_screen.looking_for")}
+          </ThemedText>
+          <ThemedText style={styles.lookingForText} numberOfLines={2}>
             {product.lookingFor.filter(Boolean).join(", ")}
           </ThemedText>
         </View>
@@ -118,20 +99,21 @@ export default function TradeProductCard({
 const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
   StyleSheet.create({
     cardContainer: {
-      width: CARD_WIDTH,
       borderRadius: 8,
-      borderWidth: 1,
+      borderCurve: "continuous",
       overflow: "hidden",
       marginBottom: 12,
+      flex: 1,
     },
     imageWrapper: {
+      height: 128,
       width: "100%",
-      height: 120,
-      backgroundColor: themeColors.border + "10",
+      backgroundColor: themeColors.secondaryBackground,
       position: "relative",
-      borderTopLeftRadius: 8,
-      borderTopRightRadius: 8,
-      overflow: "hidden",
+    },
+    imagePlaceholder: {
+      flex: 1,
+      backgroundColor: themeColors.secondaryBackground,
     },
     productImage: {
       width: "100%",
@@ -142,61 +124,62 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       position: "absolute",
       top: 8,
       right: 8,
+      backgroundColor: "#E23A2E",
+      borderRadius: 999,
       paddingHorizontal: 8,
       paddingVertical: 4,
-      borderRadius: 10,
+      maxWidth: "65%",
     },
     conditionText: {
-      color: themeColors.primaryButtonText,
-      fontSize: 11,
-      fontWeight: "bold",
-      lineHeight: 14,
+      color: "#FFFFFF",
+      fontSize: 10,
+      fontWeight: "700",
+      lineHeight: 12,
     },
     infoContainer: {
-      padding: 12,
+      padding: 8,
     },
     productTitle: {
-      fontSize: 16,
-      fontWeight: "bold",
-      marginBottom: 5,
-      lineHeight: 20,
+      fontSize: 18,
+      fontWeight: "700",
+      lineHeight: 22,
+      marginBottom: 2,
+    },
+    sellerText: {
+      fontSize: 12,
+      opacity: 0.6,
+      marginBottom: 8,
+      lineHeight: 16,
     },
     metaRow: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 4,
-      gap: 6,
+      marginBottom: 10,
+      gap: 4,
     },
     metaText: {
-      fontSize: 12,
+      fontSize: 11,
       opacity: 0.7,
+      lineHeight: 14,
       flexShrink: 1,
-      lineHeight: 16,
     },
     locationIcon: {
-      marginLeft: 8,
+      marginLeft: 4,
     },
     lookingForContainer: {
-      marginTop: 8,
-      padding: 10,
+      backgroundColor: themeColors.secondaryBackground,
       borderRadius: 8,
+      padding: 8,
     },
     lookingForLabel: {
-      fontSize: 11,
-      fontWeight: "bold",
-      opacity: 0.7,
-      flexShrink: 1,
-      lineHeight: 14, // Explicit line height
-    },
-    lookingForHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
+      fontSize: 10,
+      opacity: 0.6,
       marginBottom: 2,
+      lineHeight: 12,
     },
     lookingForText: {
       fontSize: 12,
       fontWeight: "600",
-      lineHeight: 16, // Explicit line height
+      lineHeight: 16,
     },
   });

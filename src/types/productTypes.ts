@@ -100,6 +100,8 @@ export interface TradeProduct {
     value: number;
     unit: "minutes" | "hours" | "days" | "weeks" | "months";
   };
+  owner_id?: string;
+  status?: string;
   lookingFor: Array<{
     name: string;
     description?: string;

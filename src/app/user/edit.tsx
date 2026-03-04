@@ -104,6 +104,7 @@ export default function EditProfileScreen() {
         .from("avatars")
         .upload(fileName, decode(base64), {
           contentType: "image/jpeg",
+          cacheControl: "31536000",
           upsert: true,
         });
 

@@ -233,10 +233,11 @@ const styles = StyleSheet.create({
   listItem: {
     flexDirection: "row",
     marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderCurve: "continuous",
     overflow: "hidden",
-    padding: 12,
+    padding: 8,
     elevation: 1,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -246,13 +247,13 @@ const styles = StyleSheet.create({
   listImage: {
     width: 60,
     height: 60,
-    borderRadius: 8,
+    borderRadius: 4,
     backgroundColor: "#F3F4F6",
   },
   listInfo: {
     flex: 1,
     paddingLeft: 12,
-    justifyContent: "center",
+    justifyContent: "flex-start",
   },
   infoTop: {
     flexDirection: "row",

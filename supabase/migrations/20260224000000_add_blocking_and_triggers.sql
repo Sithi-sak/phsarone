@@ -48,7 +48,8 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = '';
 
 -- Attach trigger
 DROP TRIGGER IF EXISTS on_message_block_check ON public.messages;

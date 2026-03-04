@@ -406,7 +406,11 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
     const bucket = "chat-media";
     const { data, error } = await authSupabase.storage
       .from(bucket)
-      .upload(path, arrayBuffer, { contentType, upsert: true });
+      .upload(path, arrayBuffer, {
+        contentType,
+        cacheControl: "31536000",
+        upsert: true,
+      });
 
     if (error || !data) {
       throw error || new Error("Could not upload file to 'chat-media'.");
@@ -437,26 +441,18 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
     if (!userId || !conversation?.id) return;
     try {
       const token = await getToken({});
+      const authSupabase = createClerkSupabaseClient(token);
       const isBuyer = userId === conversation.buyer_id;
       const currentMuteStatus = isBuyer ? conversation.buyer_muted : conversation.seller_muted;
       const newMuted = !currentMuteStatus;
 
-      // Call edge function to toggle mute (server will derive requester from token)
-      const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/chat-controls/mute/${conversation.id}`;
-      const resp = await fetch(url, {
+      const { data, error } = await authSupabase.functions.invoke(`chat-controls/mute/${conversation.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: token ? `Bearer ${token}` : '',
-        },
-        body: JSON.stringify({ muted: newMuted }),
+        body: { muted: newMuted },
       });
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Mute function failed: ${resp.status} ${text}`);
-      }
-      const json = await resp.json();
-      if (json?.conversation) setConversation(json.conversation as Conversation);
+
+      if (error) throw error;
+      if (data?.conversation) setConversation(data.conversation as Conversation);
     } catch (err: any) {
       console.error("Error toggling mute:", err);
     }
@@ -467,23 +463,15 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
     if (!userId) throw new Error("Not authenticated.");
     if (userId === userToBlockId) throw new Error("Cannot block yourself.");
     const token = await getToken({});
+    const authSupabase = createClerkSupabaseClient(token);
 
-    // Call edge function to block user (server derives requester from token)
-    const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/chat-controls/block`;
-    const resp = await fetch(url, {
+    const { data, error } = await authSupabase.functions.invoke('chat-controls/block', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token ? `Bearer ${token}` : '',
-      },
-      body: JSON.stringify({ blocked_id: userToBlockId }),
+      body: { blocked_id: userToBlockId },
     });
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`Block function failed: ${resp.status} ${text}`);
-    }
-    const json = await resp.json();
-    return json;
+
+    if (error) throw error;
+    return data;
   };
 
   return {

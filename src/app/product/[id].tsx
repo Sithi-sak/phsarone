@@ -74,6 +74,12 @@ export default function ProductDetail() {
     isOwner ? (id as string) : undefined,
   );
 
+  console.log("Debug Auth:", {
+    userId,
+    sellerId: rawProduct?.seller_id,
+    isOwner,
+  });
+
   useFocusEffect(
     useCallback(() => {
       if (id) {
@@ -392,6 +398,8 @@ export default function ProductDetail() {
       .filter(Boolean)
       .join(", ") || "N/A";
   const timeAgo = formatTimeAgo(product.createdAt, t);
+
+  console.log("Render Cycle isOwner:", isOwner);
 
   return (
     <SafeAreaView

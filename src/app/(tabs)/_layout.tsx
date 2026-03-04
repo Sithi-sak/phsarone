@@ -13,9 +13,6 @@ import { useTranslation } from "react-i18next";
 import { Animated, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import TradeProductsProvider from "@/src/context/TradeProductsContext";
-import TradeDraftProvider from "@src/context/TradeDraftContext";
-
 function AnimatedTabIcon({
   focused,
   color,
@@ -145,160 +142,152 @@ export default function TabLayout() {
   const iconSize = { home: 26, trade: 26, sell: 26, chat: 26, profile: 26 };
 
   return (
-    <TradeProductsProvider>
-      <TradeDraftProvider>
-        <Tabs
-          screenOptions={{
-            headerShown: false,
-            tabBarActiveTintColor: Colors.reds[500],
-            tabBarInactiveTintColor: Colors.gray[500],
-            tabBarIconStyle: {
-              marginTop: 8,
-              marginBottom: 2,
-            },
-            tabBarStyle: {
-              position: "absolute",
-              elevation: 2,
-              marginHorizontal: 16,
-              backgroundColor: themeColors.navbg,
-              borderRadius: 100,
-              borderCurve: "continuous",
-              height: 70,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              borderTopWidth: 0,
-              bottom: 16,
-              paddingVertical: 12,
-              paddingHorizontal: 12,
-            },
-          }}
-        >
-          <Tabs.Screen
-            name="index"
-            options={{
-              title: t("navigation.home"),
-              tabBarIcon: ({ focused, color }) => (
-                <AnimatedTabIcon focused={focused} color={color}>
-                  {focused ? (
-                    <Image
-                      source={require("@src/assets/icons/Main-logo-24.png")}
-                      style={{ width: 26, height: 26 }}
-                    />
-                  ) : (
-                    <HouseIcon
-                      size={iconSize.home}
-                      color={color}
-                      weight="regular"
-                    />
-                  )}
-                </AnimatedTabIcon>
-              ),
-              tabBarLabel: ({ focused, color }) => (
-                <AnimatedTabLabel
-                  focused={focused}
-                  color={color}
-                  label={t("navigation.home")}
-                  activeFont={activeFont}
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: Colors.reds[500],
+        tabBarInactiveTintColor: Colors.gray[500],
+        tabBarIconStyle: {
+          marginTop: 8,
+          marginBottom: 2,
+        },
+        tabBarStyle: {
+          position: "absolute",
+          elevation: 2,
+          marginHorizontal: 16,
+          backgroundColor: themeColors.navbg,
+          borderRadius: 100,
+          borderCurve: "continuous",
+          height: 70,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          borderTopWidth: 0,
+          bottom: 16,
+          paddingVertical: 12,
+          paddingHorizontal: 12,
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: t("navigation.home"),
+          tabBarIcon: ({ focused, color }) => (
+            <AnimatedTabIcon focused={focused} color={color}>
+              {focused ? (
+                <Image
+                  source={require("@src/assets/icons/Main-logo-24.png")}
+                  style={{ width: 26, height: 26 }}
                 />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="trade"
-            options={{
-              title: t("navigation.trade"),
-              tabBarIcon: ({ focused, color }) => (
-                <AnimatedTabIcon focused={focused} color={color}>
-                  <ArrowsClockwiseIcon
-                    size={iconSize.trade}
-                    color={color}
-                    weight={focused ? "fill" : "regular"}
-                  />
-                </AnimatedTabIcon>
-              ),
-              tabBarLabel: ({ focused, color }) => (
-                <AnimatedTabLabel
-                  focused={focused}
-                  color={color}
-                  label={t("navigation.trade")}
-                  activeFont={activeFont}
-                />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="sell"
-            options={{
-              title: t("navigation.sell"),
-              tabBarIcon: ({ focused, color }) => (
-                <AnimatedTabIcon focused={focused} color={color}>
-                  <PlusCircleIcon
-                    size={iconSize.sell}
-                    color={color}
-                    weight={focused ? "fill" : "regular"}
-                  />
-                </AnimatedTabIcon>
-              ),
-              tabBarLabel: ({ focused, color }) => (
-                <AnimatedTabLabel
-                  focused={focused}
-                  color={color}
-                  label={t("navigation.sell")}
-                  activeFont={activeFont}
-                />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="chat"
-            options={{
-              title: t("navigation.chat"),
-              tabBarIcon: ({ focused, color }) => (
-                <AnimatedTabIcon focused={focused} color={color}>
-                  <ChatCircleIcon
-                    size={iconSize.chat}
-                    color={color}
-                    weight={focused ? "fill" : "regular"}
-                  />
-                </AnimatedTabIcon>
-              ),
-              tabBarLabel: ({ focused, color }) => (
-                <AnimatedTabLabel
-                  focused={focused}
-                  color={color}
-                  label={t("navigation.chat")}
-                  activeFont={activeFont}
-                />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="profile"
-            options={{
-              title: t("navigation.profile"),
-              tabBarIcon: ({ focused, color }) => (
-                <AnimatedTabIcon focused={focused} color={color}>
-                  <UserIcon
-                    size={iconSize.profile}
-                    color={color}
-                    weight={focused ? "fill" : "regular"}
-                  />
-                </AnimatedTabIcon>
-              ),
-              tabBarLabel: ({ focused, color }) => (
-                <AnimatedTabLabel
-                  focused={focused}
-                  color={color}
-                  label={t("navigation.profile")}
-                  activeFont={activeFont}
-                />
-              ),
-            }}
-          />
-        </Tabs>
-      </TradeDraftProvider>
-    </TradeProductsProvider>
+              ) : (
+                <HouseIcon size={iconSize.home} color={color} weight="regular" />
+              )}
+            </AnimatedTabIcon>
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <AnimatedTabLabel
+              focused={focused}
+              color={color}
+              label={t("navigation.home")}
+              activeFont={activeFont}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="trade"
+        options={{
+          title: t("navigation.trade"),
+          tabBarIcon: ({ focused, color }) => (
+            <AnimatedTabIcon focused={focused} color={color}>
+              <ArrowsClockwiseIcon
+                size={iconSize.trade}
+                color={color}
+                weight={focused ? "fill" : "regular"}
+              />
+            </AnimatedTabIcon>
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <AnimatedTabLabel
+              focused={focused}
+              color={color}
+              label={t("navigation.trade")}
+              activeFont={activeFont}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="sell"
+        options={{
+          title: t("navigation.sell"),
+          tabBarIcon: ({ focused, color }) => (
+            <AnimatedTabIcon focused={focused} color={color}>
+              <PlusCircleIcon
+                size={iconSize.sell}
+                color={color}
+                weight={focused ? "fill" : "regular"}
+              />
+            </AnimatedTabIcon>
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <AnimatedTabLabel
+              focused={focused}
+              color={color}
+              label={t("navigation.sell")}
+              activeFont={activeFont}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: t("navigation.chat"),
+          tabBarIcon: ({ focused, color }) => (
+            <AnimatedTabIcon focused={focused} color={color}>
+              <ChatCircleIcon
+                size={iconSize.chat}
+                color={color}
+                weight={focused ? "fill" : "regular"}
+              />
+            </AnimatedTabIcon>
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <AnimatedTabLabel
+              focused={focused}
+              color={color}
+              label={t("navigation.chat")}
+              activeFont={activeFont}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: t("navigation.profile"),
+          tabBarIcon: ({ focused, color }) => (
+            <AnimatedTabIcon focused={focused} color={color}>
+              <UserIcon
+                size={iconSize.profile}
+                color={color}
+                weight={focused ? "fill" : "regular"}
+              />
+            </AnimatedTabIcon>
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <AnimatedTabLabel
+              focused={focused}
+              color={color}
+              label={t("navigation.profile")}
+              activeFont={activeFont}
+            />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }

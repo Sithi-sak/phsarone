@@ -1,5 +1,7 @@
 import ThemedStatusBar from "@/src/components/shared_components/ThemedStatusBar";
 import SellDraftProvider from "@/src/context/SellDraftContext";
+import TradeProductsProvider from "@/src/context/TradeProductsContext";
+import TradeDraftProvider from "@/src/context/TradeDraftContext";
 import { ThemeProvider } from "@/src/context/ThemeContext";
 import i18n from "@/src/i18n";
 import { ClerkProvider } from "@clerk/clerk-expo";
@@ -57,98 +59,102 @@ export default function RootLayout() {
       <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
         <ThemeProvider>
           <I18nextProvider i18n={i18n}>
-            <SellDraftProvider>
-              <ThemedStatusBar />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  animationDuration: 300,
-                  gestureEnabled: true,
-                  gestureDirection: "horizontal",
-                }}
-              >
-                <Stack.Screen
-                  name="(auth)"
-                  options={{
-                    animationDuration: 250,
-                  }}
-                />
-                <Stack.Screen
-                  name="(tabs)"
-                  options={{
-                    animationDuration: 250,
-                  }}
-                />
-                <Stack.Screen
-                  name="sell"
-                  options={{
-                    presentation: "modal",
-                    animationDuration: 300,
-                  }}
-                />
-                <Stack.Screen
-                  name="settings"
-                  options={{
-                    animationDuration: 280,
-                  }}
-                />
-                <Stack.Screen
-                  name="product/[id]"
-                  options={{
-                    animationDuration: 280,
-                  }}
-                />
-                <Stack.Screen
-                  name="category/[id]"
-                  options={{
-                    animationDuration: 280,
-                  }}
-                />
-                <Stack.Screen
-                  name="chat"
-                  options={{
-                    animationDuration: 280,
-                  }}
-                />
-                <Stack.Screen
-                  name="user"
-                  options={{
-                    animationDuration: 280,
-                  }}
-                />
-                <Stack.Screen
-                  name="trade"
-                  options={{
-                    presentation: "modal",
-                    animationDuration: 300,
-                  }}
-                />
-                <Stack.Screen
-                  name="notifications"
-                  options={{
-                    animationDuration: 280,
-                  }}
-                />
-                <Stack.Screen
-                  name="subscription"
-                  options={{
-                    animationDuration: 280,
-                  }}
-                />
-                <Stack.Screen
-                  name="favorites"
-                  options={{
-                    animationDuration: 280,
-                  }}
-                />
-                <Stack.Screen
-                  name="search"
-                  options={{
-                    animationDuration: 250,
-                  }}
-                />
-              </Stack>
-            </SellDraftProvider>
+            <TradeProductsProvider>
+              <TradeDraftProvider>
+                <SellDraftProvider>
+                  <ThemedStatusBar />
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      animationDuration: 300,
+                      gestureEnabled: true,
+                      gestureDirection: "horizontal",
+                    }}
+                  >
+                    <Stack.Screen
+                      name="(auth)"
+                      options={{
+                        animationDuration: 250,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="(tabs)"
+                      options={{
+                        animationDuration: 250,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="sell"
+                      options={{
+                        presentation: "modal",
+                        animationDuration: 300,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="settings"
+                      options={{
+                        animationDuration: 280,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="product/[id]"
+                      options={{
+                        animationDuration: 280,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="category/[id]"
+                      options={{
+                        animationDuration: 280,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="chat"
+                      options={{
+                        animationDuration: 280,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="user"
+                      options={{
+                        animationDuration: 280,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="trade"
+                      options={{
+                        presentation: "modal",
+                        animationDuration: 300,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="notifications"
+                      options={{
+                        animationDuration: 280,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="subscription"
+                      options={{
+                        animationDuration: 280,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="favorites"
+                      options={{
+                        animationDuration: 280,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="search"
+                      options={{
+                        animationDuration: 250,
+                      }}
+                    />
+                  </Stack>
+                </SellDraftProvider>
+              </TradeDraftProvider>
+            </TradeProductsProvider>
           </I18nextProvider>
         </ThemeProvider>
       </ClerkProvider>

@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -237,7 +237,16 @@ export default function ChatScreen() {
   const themeColors = useThemeColor();
   const { userId, getToken } = useAuth();
   const { t } = useTranslation();
+  const { tab } = useLocalSearchParams<{ tab: string }>();
   const [activeTab, setActiveTab] = useState<"regular" | "trade">("regular");
+
+  useEffect(() => {
+    if (tab === "trade") {
+      setActiveTab("trade");
+    } else if (tab === "regular") {
+      setActiveTab("regular");
+    }
+  }, [tab]);
 
   const { conversations, loading, error, refresh } =
     useConversations(activeTab);
@@ -352,7 +361,7 @@ export default function ChatScreen() {
 
       {loading && !conversations.length ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={themeColors.tint} />
+          <ActivityIndicator size="small" color={themeColors.tint} />
         </View>
       ) : (
         <FlatList
@@ -403,48 +412,27 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     alignItems: "center",
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
   tabContainer: {
     flexDirection: "row",
     marginHorizontal: 16,
-    gap: 12,
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 16,
+    gap: 8,
+    marginBottom: 16,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: 99,
   },
-  tabText: { fontWeight: "600", fontSize: 16 },
-  listContent: { flexGrow: 1, paddingBottom: 100 },
-  separator: { height: 1, marginHorizontal: 20 },
-
-  // Swipe
-  swipeContainer: {
-    overflow: "hidden",
-  },
-  deleteAction: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: DELETE_WIDTH,
-    backgroundColor: "#EF4444",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  deleteButton: {
-    flex: 1,
-    width: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 4,
-  },
-  deleteText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "600",
+  tabText: {
+    fontWeight: "400",
+    fontSize: 16,
   },
   rowContainer: {
     flex: 1,
