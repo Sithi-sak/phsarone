@@ -1,17 +1,19 @@
 import { CAMBODIA_LOCATIONS } from "@/src/constants/CambodiaLocations";
 import useThemeColor from "@/src/hooks/useThemeColor";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
-import { CaretLeftIcon } from "phosphor-react-native";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
+  TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+
+type SortOption = "none" | "price_low_to_high" | "price_high_to_low";
+type ConditionType = "new" | "like_new" | "used" | "refurbished";
 
 interface LocationFilterModalProps {
   isVisible: boolean;
@@ -36,270 +38,354 @@ export default function LocationFilterModal({
 }: LocationFilterModalProps) {
   const { t, i18n } = useTranslation();
   const themeColors = useThemeColor();
-  const activeFont = i18n.language === "kh" ? "khmer-regular" : "Oxygen";
-
-  const [selectedProvince, setSelectedProvince] = useState<string | null>(
+  const [searchQuery, setSearchQuery] = useState("");
+  const [tempProvince, setTempProvince] = useState<string | null>(
     currentProvince,
   );
-  const [selectedDistrict, setSelectedDistrict] = useState<string | null>(
+  const [tempDistrict, setTempDistrict] = useState<string | null>(
     currentDistrict,
   );
-  const [selectedCommune, setSelectedCommune] = useState<string | null>(
-    currentCommune,
-  );
+  const [tempCommune, setTempCommune] = useState<string | null>(currentCommune);
 
   useEffect(() => {
-    setSelectedProvince(currentProvince);
-    setSelectedDistrict(currentDistrict);
-    setSelectedCommune(currentCommune);
+    setTempProvince(currentProvince);
+    setTempDistrict(currentDistrict);
+    setTempCommune(currentCommune);
   }, [currentProvince, currentDistrict, currentCommune]);
 
-  const handleApply = () => {
-    onApplyFilters(selectedProvince, selectedDistrict, selectedCommune);
-    onClose();
-  };
-
-  const handleClear = () => {
-    setSelectedProvince(null);
-    setSelectedDistrict(null);
-    setSelectedCommune(null);
-  };
-
   const getDistricts = () => {
-    if (!selectedProvince) return [];
+    if (!tempProvince) return [];
     const provinceData = CAMBODIA_LOCATIONS.find(
-      (loc) => loc.name_en === selectedProvince,
+      (loc) => loc.name_en === tempProvince,
     );
     return provinceData?.subdivisions || [];
   };
 
   const getCommunes = () => {
-    if (!selectedProvince || !selectedDistrict) return [];
+    if (!tempProvince || !tempDistrict) return [];
     const provinceData = CAMBODIA_LOCATIONS.find(
-      (loc) => loc.name_en === selectedProvince,
+      (loc) => loc.name_en === tempProvince,
     );
     const districtData = provinceData?.subdivisions.find(
-      (sub) => sub.name_en === selectedDistrict,
+      (sub) => sub.name_en === tempDistrict,
     );
     return districtData?.subdivisions || [];
   };
 
-  const renderItem = ({ item, type }: { item: any; type: string }) => {
+  const locationsToShow = tempProvince
+    ? tempDistrict
+      ? getCommunes()
+      : getDistricts()
+    : CAMBODIA_LOCATIONS.filter((item) => {
+        const query = searchQuery.toLowerCase();
+        return (
+          item.name_en.toLowerCase().includes(query) ||
+          item.name_km.toLowerCase().includes(query)
+        );
+      });
+
+  const renderItem = (item: any, type: "province" | "district" | "commune") => {
     const isSelected =
-      (type === "province" && selectedProvince === item.name_en) ||
-      (type === "district" && selectedDistrict === item.name_en) ||
-      (type === "commune" && selectedCommune === item.name_en);
+      (type === "province" && tempProvince === item.name_en) ||
+      (type === "district" && tempDistrict === item.name_en) ||
+      (type === "commune" && tempCommune === item.name_en);
 
     return (
-      <TouchableOpacity
-        style={[
-          styles.chip,
-          {
-            backgroundColor: isSelected ? themeColors.tint : themeColors.card,
-            borderColor: isSelected ? themeColors.tint : themeColors.border,
-          },
-        ]}
+      <Pressable
+        key={item.name_en}
         onPress={() => {
           if (type === "province") {
-            setSelectedProvince(item.name_en);
-            setSelectedDistrict(null);
-            setSelectedCommune(null);
+            setTempProvince(item.name_en);
+            setTempDistrict(null);
+            setTempCommune(null);
+            setSearchQuery("");
           } else if (type === "district") {
-            setSelectedDistrict(item.name_en);
-            setSelectedCommune(null);
-          } else if (type === "commune") {
-            setSelectedCommune(item.name_en);
+            setTempDistrict(item.name_en);
+            setTempCommune(null);
+          } else {
+            setTempCommune(item.name_en);
           }
         }}
+        style={({ pressed }) => [
+          styles.listItem,
+          {
+            backgroundColor: isSelected
+              ? `${themeColors.tint}10`
+              : pressed
+                ? themeColors.card
+                : "transparent",
+            borderBottomColor: themeColors.border,
+          },
+        ]}
       >
-        <ThemedText
+        <View
           style={[
-            styles.chipText,
+            styles.radio,
             {
-              fontFamily: activeFont,
-              color: isSelected ? "#FFFFFF" : themeColors.text,
+              borderColor: isSelected ? themeColors.tint : themeColors.border,
+              backgroundColor: isSelected ? themeColors.tint : "transparent",
             },
           ]}
         >
-          {item[`name_${i18n.language}`] || item.name_en}
+          {isSelected && <View style={styles.radioInner} />}
+        </View>
+        <ThemedText style={styles.itemText}>
+          {i18n.language === "kh" ? item.name_km : item.name_en}
         </ThemedText>
-      </TouchableOpacity>
+      </Pressable>
     );
+  };
+
+  const handleApply = () => {
+    onApplyFilters(tempProvince, tempDistrict, tempCommune);
+    onClose();
+  };
+
+  const handleClear = () => {
+    setTempProvince(null);
+    setTempDistrict(null);
+    setTempCommune(null);
+    setSearchQuery("");
+  };
+
+  const handleBack = () => {
+    if (tempCommune) {
+      setTempCommune(null);
+    } else if (tempDistrict) {
+      setTempDistrict(null);
+    } else if (tempProvince) {
+      setTempProvince(null);
+      setSearchQuery("");
+    } else {
+      onClose();
+    }
+  };
+
+  const getCurrentTitle = () => {
+    // Show title based on what we're DISPLAYING, not what's selected
+    if (tempProvince && tempDistrict) return t("location.commune");
+    if (tempProvince) return t("location.district");
+    return t("location.province");
   };
 
   return (
     <Modal
       visible={isVisible}
+      transparent
       animationType="slide"
-      presentationStyle="fullScreen"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: themeColors.background }]}
-        edges={["top"]}
-      >
+      <Pressable style={styles.backdrop} onPress={onClose} />
+
+      <View style={[styles.sheet, { backgroundColor: themeColors.background }]}>
+        {/* Handle */}
+        <View style={styles.handle}>
+          <View
+            style={[styles.handlePill, { backgroundColor: themeColors.border }]}
+          />
+        </View>
+
         {/* Header */}
         <View
           style={[
             styles.header,
             {
-              backgroundColor: themeColors.background,
               borderBottomColor: themeColors.border,
             },
           ]}
         >
-          <TouchableOpacity onPress={onClose} style={styles.headerButton}>
-            <CaretLeftIcon size={24} color={themeColors.text} />
-          </TouchableOpacity>
-          <ThemedText
-            style={[
-              styles.headerTitle,
-              { fontFamily: activeFont, color: themeColors.text },
-            ]}
-          >
-            {t("fields.filter_location")}
+          <Pressable onPress={handleBack} style={styles.headerBtn}>
+            <ThemedText style={styles.headerBtnText}>✕</ThemedText>
+          </Pressable>
+          <ThemedText style={styles.headerTitle}>
+            {getCurrentTitle()}
           </ThemedText>
-          <TouchableOpacity onPress={handleClear} style={styles.headerButton}>
-            <ThemedText style={{ color: themeColors.tint }}>
+          <Pressable onPress={handleClear} style={styles.headerBtn}>
+            <ThemedText style={[styles.resetText, { color: themeColors.tint }]}>
               {t("common.clear")}
             </ThemedText>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
-        <ScrollView style={styles.content}>
-          <View style={styles.section}>
-            <ThemedText
-              style={[styles.sectionTitle, { fontFamily: activeFont }]}
-            >
-              {t("location.province")}
-            </ThemedText>
-            <View style={styles.chipsContainer}>
-              {CAMBODIA_LOCATIONS.map((item) =>
-                renderItem({ item, type: "province" }),
-              )}
-            </View>
+        {/* Search (only show on province level) */}
+        {!tempProvince && (
+          <View
+            style={[
+              styles.searchContainer,
+              {
+                backgroundColor: themeColors.card,
+                borderColor: themeColors.border,
+              },
+            ]}
+          >
+            <TextInput
+              placeholder={t("common.search_province") || "Search province..."}
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={[styles.searchInput, { color: themeColors.text }]}
+            />
           </View>
+        )}
 
-          {selectedProvince && (
-            <View style={styles.section}>
-              <ThemedText
-                style={[styles.sectionTitle, { fontFamily: activeFont }]}
-              >
-                {t("location.district")}
-              </ThemedText>
-              <View style={styles.chipsContainer}>
-                {getDistricts().map((item) =>
-                  renderItem({ item, type: "district" }),
-                )}
-              </View>
-            </View>
-          )}
-
-          {selectedDistrict && (
-            <View style={styles.section}>
-              <ThemedText
-                style={[styles.sectionTitle, { fontFamily: activeFont }]}
-              >
-                {t("location.commune")}
-              </ThemedText>
-              <View style={styles.chipsContainer}>
-                {getCommunes().map((item) =>
-                  renderItem({ item, type: "commune" }),
-                )}
-              </View>
-            </View>
-          )}
+        {/* List */}
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+          {locationsToShow.map((item) => {
+            // Type should match what we're DISPLAYING
+            const type = tempProvince
+              ? tempDistrict
+                ? "commune"
+                : "district"
+              : "province";
+            return renderItem(item, type as any);
+          })}
         </ScrollView>
 
+        {/* Footer Button */}
         <View style={[styles.footer, { borderTopColor: themeColors.border }]}>
-          <TouchableOpacity
-            style={[
-              styles.applyButton,
-              { backgroundColor: themeColors.primary },
-            ]}
+          <Pressable
             onPress={handleApply}
+            style={({ pressed }) => [
+              styles.applyBtn,
+              {
+                backgroundColor: themeColors.tint,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
           >
-            <ThemedText
-              style={[
-                styles.applyButtonText,
-                { color: themeColors.primaryButtonText },
-              ]}
-            >
+            <ThemedText style={styles.applyBtnText}>
               {t("common.apply")}
             </ThemedText>
-          </TouchableOpacity>
+          </Pressable>
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+  },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: "90%",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 24,
+  },
+  handle: {
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  handlePill: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerButton: {
-    width: 60,
-    height: 24,
-    justifyContent: "center",
+  headerBtn: {
+    padding: 8,
+    minWidth: 44,
+  },
+  headerBtnText: {
+    fontSize: 20,
+    fontWeight: "600",
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
+    flex: 1,
     textAlign: "center",
-    flex: 1,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
+  resetText: {
+    fontSize: 14,
     fontWeight: "600",
-    marginBottom: 10,
   },
-  chipsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  chip: {
+  searchContainer: {
+    marginHorizontal: 16,
+    marginVertical: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     alignItems: "center",
   },
-  chipText: {
-    fontSize: 12,
-    fontWeight: "500",
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 0,
   },
-  footer: {
+  list: {
+    flex: 1,
+    paddingHorizontal: 0,
+  },
+  listItem: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-  },
-  applyButton: {
     paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  radio: {
+    width: 20,
+    height: 20,
     borderRadius: 10,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
   },
-  applyButtonText: {
+  radioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#fff",
+  },
+  itemText: {
     fontSize: 16,
+    fontWeight: "500",
+  },
+  levelTitle: {
+    fontSize: 14,
     fontWeight: "600",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 28,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  applyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 54,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+  },
+  applyBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#fff",
   },
 });
