@@ -441,6 +441,8 @@ export default function ProductDetail() {
           <ProductDescription
             description={product.description}
             activeFont={activeFont}
+            subCategory={product.subCategory}
+            details={product.details}
           />
 
           {/* Product Details */}

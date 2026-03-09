@@ -1,3 +1,4 @@
+import DescriptionSuggestion from "@src/components/sell_components/DescriptionSuggestion";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { ThemedTextInput } from "@src/components/shared_components/ThemedTextInput";
 import { useSellDraft } from "@src/context/SellDraftContext";
@@ -18,6 +19,19 @@ export default function DynamicPostFields({ fields }: DynamicPostFieldsProps) {
   const themeColors = useThemeColor();
   const { t } = useTranslation();
 
+  const toOptionKey = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+  const localizeSelectOption = (option: string) =>
+    t(`optionValues.${toOptionKey(option)}`, { defaultValue: option });
+
+  // Check if condition field exists in the fields array
+  const hasConditionField = fields.some((field) => field.key === "condition");
+
   const renderLabel = (field: any) => (
     <View style={styles.labelRow}>
       <ThemedText style={styles.inputLabel}>
@@ -26,6 +40,49 @@ export default function DynamicPostFields({ fields }: DynamicPostFieldsProps) {
       {field.required && (
         <ThemedText style={{ color: themeColors.primary }}>*</ThemedText>
       )}
+    </View>
+  );
+
+  const renderDescriptionSection = () => (
+    <View style={styles.fieldSection}>
+      <View style={styles.labelRow}>
+        <ThemedText style={styles.inputLabel}>
+          {t("productDetail.description")}
+        </ThemedText>
+      </View>
+      <ThemedTextInput
+        style={[
+          styles.input,
+          styles.textArea,
+          {
+            borderColor: themeColors.border,
+            backgroundColor: themeColors.background,
+            color: themeColors.text,
+          },
+        ]}
+        placeholder={t("sellForm.describe_placeholder", {
+          defaultValue: "Describe your item ......",
+        })}
+        multiline
+        numberOfLines={4}
+        value={draft.description}
+        onChangeText={(text) => updateDraft("description", text)}
+      />
+      <ThemedText
+        style={[styles.hintText, { color: themeColors.tabIconDefault }]}
+      >
+        {t("sellForm.description_hint", {
+          defaultValue:
+            "Add details about condition, features, or any other relevant information",
+        })}
+      </ThemedText>
+
+      <DescriptionSuggestion
+        subCategory={draft.subCategory}
+        currentDescription={draft.description}
+        details={draft.details}
+        onApply={(description) => updateDraft("description", description)}
+      />
     </View>
   );
 
@@ -46,45 +103,18 @@ export default function DynamicPostFields({ fields }: DynamicPostFieldsProps) {
               color: themeColors.text,
             },
           ]}
-          placeholder="e.g., Car for Sale"
+          placeholder={t("sellForm.title_placeholder", {
+            defaultValue: "e.g., Car for Sale",
+          })}
           value={draft.title}
           onChangeText={(text) => updateDraft("title", text)}
         />
       </View>
 
-      {/* Description Section */}
-      <View style={styles.fieldSection}>
-        <View style={styles.labelRow}>
-          <ThemedText style={styles.inputLabel}>
-            {t("productDetail.description")}
-          </ThemedText>
-        </View>
-        <ThemedTextInput
-          style={[
-            styles.input,
-            styles.textArea,
-            {
-              borderColor: themeColors.border,
-              backgroundColor: themeColors.background,
-              color: themeColors.text,
-            },
-          ]}
-          placeholder="Describe your item ......"
-          multiline
-          numberOfLines={4}
-          value={draft.description}
-          onChangeText={(text) => updateDraft("description", text)}
-        />
-        <ThemedText
-          style={[styles.hintText, { color: themeColors.tabIconDefault }]}
-        >
-          Add details about condition, features, or any other relevant
-          information
-        </ThemedText>
-      </View>
-
       <ThemedText style={styles.groupHeader}>
-        {t(`subcategories.${draft.subCategory}`) || draft.subCategory} Details
+        {(t(`subcategories.${draft.subCategory}`) || draft.subCategory) +
+          " " +
+          t("sellForm.details_suffix", { defaultValue: "Details" })}
       </ThemedText>
 
       {fields.map((field) => {
@@ -92,83 +122,127 @@ export default function DynamicPostFields({ fields }: DynamicPostFieldsProps) {
         const currentValue = draft.details[field.key];
 
         return (
-          <View key={field.key} style={styles.fieldSection}>
-            {renderLabel(field)}
+          <React.Fragment key={field.key}>
+            <View style={styles.fieldSection}>
+              {renderLabel(field)}
 
-            {(fieldType === "text" || fieldType === "number") && (
-              <View style={styles.inputWrapper}>
-                <ThemedTextInput
-                  style={[
-                    styles.input,
-                    {
-                      borderColor: themeColors.border,
-                      backgroundColor: themeColors.background,
-                      color: themeColors.text,
-                    },
-                  ]}
-                  value={currentValue || ""}
-                  onChangeText={(text) => updateDetail(field.key, text)}
-                  keyboardType={fieldType === "number" ? "numeric" : "default"}
-                  placeholder={field.key === "model" ? "Camry" : ""}
-                />
-                {field.key === "mileage" && (
-                  <ThemedText
+              {(fieldType === "text" || fieldType === "number") && (
+                <View style={styles.inputWrapper}>
+                  <ThemedTextInput
                     style={[
-                      styles.unitText,
-                      { color: themeColors.tabIconDefault },
+                      styles.input,
+                      {
+                        borderColor: themeColors.border,
+                        backgroundColor: themeColors.background,
+                        color: themeColors.text,
+                      },
                     ]}
-                  >
-                    KM
-                  </ThemedText>
-                )}
-              </View>
-            )}
-
-            {fieldType === "select" && field.options && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.chipScroll}
-                contentContainerStyle={styles.chipContent}
-              >
-                {field.options.map((option: string) => {
-                  const isSelected = currentValue === option;
-                  return (
-                    <TouchableOpacity
-                      key={option}
+                    value={currentValue || ""}
+                    onChangeText={(text) => updateDetail(field.key, text)}
+                    keyboardType={
+                      fieldType === "number" ? "numeric" : "default"
+                    }
+                    placeholder={
+                      field.key === "model"
+                        ? t("sellForm.model_placeholder", {
+                            defaultValue: "Camry",
+                          })
+                        : ""
+                    }
+                  />
+                  {field.key === "mileage" && (
+                    <ThemedText
                       style={[
-                        styles.chip,
-                        {
-                          borderColor: themeColors.border,
-                          backgroundColor: themeColors.card,
-                        },
-                        isSelected && {
-                          borderColor: themeColors.primary,
-                          borderWidth: 2,
-                        },
+                        styles.unitText,
+                        { color: themeColors.tabIconDefault },
                       ]}
-                      onPress={() => updateDetail(field.key, option)}
-                      activeOpacity={0.7}
                     >
-                      <ThemedText
+                      KM
+                    </ThemedText>
+                  )}
+                </View>
+              )}
+
+              {fieldType === "select" && field.options && (
+                <>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.chipScroll}
+                    contentContainerStyle={styles.chipContent}
+                  >
+                    {field.options.map((option: string) => {
+                      const isSelected = currentValue === option;
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={[
+                            styles.chip,
+                            {
+                              borderColor: themeColors.border,
+                              backgroundColor: themeColors.card,
+                            },
+                            isSelected && {
+                              borderColor: themeColors.primary,
+                              borderWidth: 2,
+                            },
+                          ]}
+                          onPress={() => updateDetail(field.key, option)}
+                          activeOpacity={0.7}
+                        >
+                          <ThemedText
+                            style={[
+                              styles.chipText,
+                              isSelected && {
+                                color: themeColors.primary,
+                                fontWeight: "700",
+                              },
+                            ]}
+                          >
+                            {localizeSelectOption(option)}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {currentValue === "Others" && (
+                    <View style={styles.inputWrapper}>
+                      <ThemedTextInput
                         style={[
-                          styles.chipText,
-                          isSelected && {
-                            color: themeColors.primary,
-                            fontWeight: "700",
+                          styles.input,
+                          {
+                            borderColor: themeColors.primary,
+                            backgroundColor: themeColors.background,
+                            color: themeColors.text,
+                            marginTop: 12,
                           },
                         ]}
-                      >
-                        {option}
-                      </ThemedText>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
+                        placeholder={t("sellForm.custom_value_placeholder", {
+                          defaultValue: `Enter custom ${field.label.toLowerCase()}`,
+                          field: t(`fields.${field.key}`, {
+                            defaultValue: field.label.toLowerCase(),
+                          }),
+                        })}
+                        value={draft.details[`${field.key}_custom`] || ""}
+                        onChangeText={(text) =>
+                          updateDetail(`${field.key}_custom`, text)
+                        }
+                      />
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+
+            {/* Render Description Section after Condition field */}
+            {field.key === "condition" && renderDescriptionSection()}
+          </React.Fragment>
         );
       })}
+
+      {/* Render Description Section at the end if no condition field exists */}
+      {!hasConditionField && renderDescriptionSection()}
     </>
   );
 }

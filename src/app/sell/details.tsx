@@ -1,5 +1,9 @@
+import DataQualityWarnings from "@src/components/sell_components/DataQualityWarnings";
 import DynamicPostFields from "@src/components/sell_components/DynamicPostFields";
+import FormattedProductPreview from "@src/components/sell_components/FormattedProductPreview";
+import FormattingFeatureBanner from "@src/components/sell_components/FormattingFeatureBanner";
 import PriceAndDiscountForm from "@src/components/sell_components/PriceAndDiscountForm";
+import ProductDetailsCompletion from "@src/components/sell_components/ProductDetailsCompletion";
 import AddressDropdowns from "@src/components/shared_components/AddressDropdowns";
 import LocationPickerMap from "@src/components/shared_components/LocationPickerMap";
 import PhotoUploadSection from "@src/components/shared_components/PhotoUploadSection";
@@ -10,7 +14,7 @@ import { useSellDraft } from "@src/context/SellDraftContext";
 import { usePostProduct } from "@src/hooks/usePostProduct";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { CaretLeftIcon } from "phosphor-react-native";
+import { CaretLeftIcon, ListBullets, SparkleIcon } from "phosphor-react-native";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -30,6 +34,7 @@ export default function ProductDetailsForm() {
   const { t } = useTranslation();
   const { editId } = useLocalSearchParams<{ editId: string }>();
   const [isInitialLoading, setIsInitialLoading] = useState(!!editId);
+  const [showFormattedDetails, setShowFormattedDetails] = useState(true);
 
   const fields = POST_FIELDS_MAP[draft.subCategory] || [];
   const themeColors = useThemeColor();
@@ -48,7 +53,7 @@ export default function ProductDetailsForm() {
           // Cast data to any to resolve the mismatch between Supabase Json and the local state Record
           setDraft(data as any);
         } catch (error) {
-          Alert.alert("Error", "Failed to load product details.");
+          Alert.alert(t("common.error"), t("sellSection.load_failed"));
           router.back();
         } finally {
           setIsInitialLoading(false);
@@ -57,6 +62,13 @@ export default function ProductDetailsForm() {
       loadProduct();
     }
   }, [editId]);
+
+  useEffect(() => {
+    return () => {
+      // Keep image input clean when user leaves this screen.
+      setDraft((prev) => ({ ...prev, photos: [] }));
+    };
+  }, [setDraft]);
 
   const [isLocationConfirmed, setIsLocationConfirmed] = useState(false);
 
@@ -93,6 +105,12 @@ export default function ProductDetailsForm() {
     }
   };
 
+  const handleNavigateBack = () => {
+    // Clear image input when leaving this screen via back navigation.
+    updateDraft("photos", []);
+    router.back();
+  };
+
   if (isInitialLoading) {
     return (
       <View
@@ -117,19 +135,62 @@ export default function ProductDetailsForm() {
         style={[styles.header, { backgroundColor: themeColors.background }]}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={handleNavigateBack}
           style={styles.backButton}
         >
           <CaretLeftIcon size={24} color={themeColors.text} weight="bold" />
         </TouchableOpacity>
 
-        <ThemedText style={styles.headerTitle}>
-          {editId
-            ? t("sellSection.edit_listing")
-            : t(`subcategories.${draft.subCategory}`) || draft.subCategory}
-        </ThemedText>
+        <View style={styles.titleContainer}>
+          <ThemedText style={styles.headerTitle}>
+            {editId
+              ? t("sellSection.edit_listing")
+              : t(`subcategories.${draft.subCategory}`) || draft.subCategory}
+          </ThemedText>
+          <ThemedText
+            style={[styles.headerSubtitle, { color: themeColors.text }]}
+          >
+            {t("productDetailsComponents.detailsSubtitle")}
+          </ThemedText>
+        </View>
 
-        <View style={{ width: 44 }} />
+        <TouchableOpacity
+          onPress={() => setShowFormattedDetails(!showFormattedDetails)}
+          style={[
+            styles.toggleButton,
+            {
+              backgroundColor: showFormattedDetails
+                ? themeColors.primary
+                : themeColors.card,
+              borderColor: showFormattedDetails
+                ? themeColors.primary
+                : themeColors.border,
+            },
+          ]}
+          activeOpacity={0.7}
+        >
+          {showFormattedDetails ? (
+            <>
+              <SparkleIcon size={18} color="white" weight="fill" />
+              <ThemedText style={styles.toggleButtonTextActive}>
+                {t("productDetailsComponents.format")}
+              </ThemedText>
+            </>
+          ) : (
+            <>
+              <ListBullets
+                size={18}
+                color={themeColors.text}
+                weight="regular"
+              />
+              <ThemedText
+                style={[styles.toggleButtonText, { color: themeColors.text }]}
+              >
+                {t("productDetailsComponents.format")}
+              </ThemedText>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -142,6 +203,11 @@ export default function ProductDetailsForm() {
           contentContainerStyle={{ paddingBottom: 40 }}
           ListHeaderComponent={
             <View style={styles.formContainer}>
+              <FormattingFeatureBanner
+                isEnabled={showFormattedDetails}
+                onToggle={() => setShowFormattedDetails(!showFormattedDetails)}
+              />
+
               {/* Card 1: Main Info & Photos */}
               <View
                 style={[styles.card, { backgroundColor: themeColors.card }]}
@@ -159,6 +225,29 @@ export default function ProductDetailsForm() {
                   themeColors={themeColors}
                   t={t}
                 />
+
+                <DataQualityWarnings
+                  subCategory={draft.subCategory}
+                  details={draft.details}
+                />
+
+                {showFormattedDetails && (
+                  <>
+                    {Object.keys(draft.details).length > 0 && (
+                      <FormattedProductPreview
+                        subCategory={draft.subCategory}
+                        details={draft.details}
+                        title={t("productDetailsComponents.detailsSummary")}
+                      />
+                    )}
+
+                    <ProductDetailsCompletion
+                      subCategory={draft.subCategory}
+                      details={draft.details}
+                      showMissingFields={true}
+                    />
+                  </>
+                )}
               </View>
 
               {/* Card 2: Pricing */}
@@ -202,7 +291,7 @@ export default function ProductDetailsForm() {
                     styles.cancelBtn,
                     { backgroundColor: themeColors.secondaryBackground },
                   ]}
-                  onPress={() => router.back()}
+                  onPress={handleNavigateBack}
                 >
                   <ThemedText
                     style={[styles.cancelBtnText, { color: themeColors.text }]}
@@ -243,15 +332,51 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 12,
   },
   backButton: {
     padding: 8,
+    marginLeft: -8,
+  },
+  titleContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginBottom: 2,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    opacity: 0.7,
+  },
+  toggleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  toggleButtonTextActive: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "800",
   },
   formContainer: {
     padding: 8,
