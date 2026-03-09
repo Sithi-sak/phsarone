@@ -10,8 +10,8 @@ const stripe = new Stripe(STRIPE_SECRET_KEY);
 
 const PLAN_DURATION_DAYS: Record<string, number> = {
   starter: 30,
-  pro: 30,
-  business: 30,
+  pro: 60,
+  business: 120,
 };
 
 function jsonResponse(status: number, data: Record<string, unknown>) {
@@ -52,6 +52,12 @@ Deno.serve(async (req) => {
     });
   }
 
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return jsonResponse(500, {
+      error: "Supabase service credentials are missing.",
+    });
+  }
+
   const userId = getUserIdFromRequest(req);
   if (!userId) {
     return jsonResponse(401, { error: "missing_or_invalid_auth" });
@@ -78,7 +84,12 @@ Deno.serve(async (req) => {
 
     const requestedPlanId = String(body?.planId || "").toLowerCase();
     const metadataPlanId = String(paymentIntent.metadata?.plan_id || "").toLowerCase();
-    const planId = requestedPlanId || metadataPlanId;
+
+    if (requestedPlanId && metadataPlanId && requestedPlanId !== metadataPlanId) {
+      return jsonResponse(400, { error: "plan_mismatch" });
+    }
+
+    const planId = metadataPlanId || requestedPlanId;
 
     if (!PLAN_DURATION_DAYS[planId]) {
       return jsonResponse(400, { error: "invalid_plan" });
@@ -123,6 +134,18 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       return jsonResponse(500, { error: upsertError.message });
+    }
+
+    const { error: userUpdateError } = await supabase
+      .from("users")
+      .update({
+        user_type: planId,
+        updated_at: nowIso,
+      })
+      .eq("id", userId);
+
+    if (userUpdateError) {
+      return jsonResponse(500, { error: userUpdateError.message });
     }
 
     return jsonResponse(200, {
