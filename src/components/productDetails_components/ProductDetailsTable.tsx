@@ -1,6 +1,6 @@
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 
@@ -30,8 +30,21 @@ const ProductDetailsTable: React.FC<ProductDetailsTableProps> = ({
   subCategory,
   productDetails,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const themeColors = useThemeColor();
+  const [, setLanguageFlag] = useState(0);
+
+  // Force re-render when language changes
+  useEffect(() => {
+    const handleLanguageChanged = () => {
+      setLanguageFlag((prev) => prev + 1);
+    };
+
+    i18n.on("languageChanged", handleLanguageChanged);
+    return () => {
+      i18n.off("languageChanged", handleLanguageChanged);
+    };
+  }, [i18n]);
 
   return (
     <View style={styles.section}>
@@ -49,7 +62,9 @@ const ProductDetailsTable: React.FC<ProductDetailsTableProps> = ({
           {t("productDetail.mainCategory")}
         </ThemedText>
         <ThemedText style={styles.descriptionValue}>
-          {mainCategory ? t(`categories.${mainCategory}`, { defaultValue: mainCategory }) : ""}
+          {mainCategory
+            ? t(`categories.${mainCategory}`, { defaultValue: mainCategory })
+            : ""}
         </ThemedText>
       </View>
 
@@ -63,7 +78,9 @@ const ProductDetailsTable: React.FC<ProductDetailsTableProps> = ({
           {t("productDetail.subCategory")}
         </ThemedText>
         <ThemedText style={styles.descriptionValue}>
-          {subCategory ? t(`subcategories.${subCategory}`, { defaultValue: subCategory }) : ""}
+          {subCategory
+            ? t(`subcategories.${subCategory}`, { defaultValue: subCategory })
+            : ""}
         </ThemedText>
       </View>
 

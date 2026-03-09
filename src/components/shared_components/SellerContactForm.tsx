@@ -4,7 +4,7 @@ import { ThemedTextInput } from "@src/components/shared_components/ThemedTextInp
 import { useSellDraft } from "@src/context/SellDraftContext";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { TFunction } from "i18next";
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 
@@ -13,10 +13,16 @@ interface SellerContactFormProps {
   t: TFunction<"translation", undefined>;
 }
 
+const validateEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 export default function SellerContactForm({}: SellerContactFormProps) {
   const themeColors = useThemeColor();
   const { t } = useTranslation();
   const { draft, updateDraft } = useSellDraft();
+  const [emailError, setEmailError] = useState<string>("");
 
   return (
     <>
@@ -120,22 +126,41 @@ export default function SellerContactForm({}: SellerContactFormProps) {
       {/* Email Input */}
       <View style={styles.inputGroup}>
         <ThemedText style={styles.inputLabel}>
-          {t("sellSection.Email")}
+          {t("sellSection.Email")} *
         </ThemedText>
         <ThemedTextInput
           style={[
             styles.input,
             {
               color: themeColors.text,
-              borderColor: themeColors.border,
+              borderColor: emailError ? themeColors.error : themeColors.border,
             },
           ]}
           value={draft.contact.email}
-          onChangeText={(text) =>
-            updateDraft("contact", { ...draft.contact, email: text })
-          }
+          onChangeText={(text) => {
+            updateDraft("contact", { ...draft.contact, email: text });
+            // Validate email as user types
+            if (text.length === 0) {
+              setEmailError("");
+            } else if (!validateEmail(text)) {
+              setEmailError(
+                t("sellSection.EmailError", {
+                  defaultValue: "Invalid email format",
+                }),
+              );
+            } else {
+              setEmailError("");
+            }
+          }}
           keyboardType="email-address"
+          placeholder="example@email.com"
+          placeholderTextColor={themeColors.text + "80"}
         />
+        {emailError ? (
+          <ThemedText style={[styles.errorText, { color: themeColors.error }]}>
+            {emailError}
+          </ThemedText>
+        ) : null}
       </View>
     </>
   );
@@ -173,5 +198,10 @@ const styles = StyleSheet.create({
   },
   removeBtn: {
     marginLeft: 10,
+  },
+  errorText: {
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
 });

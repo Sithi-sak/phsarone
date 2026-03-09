@@ -36,11 +36,15 @@ const ProductActionButtons: React.FC<ProductActionButtonsProps> = ({
       <View style={styles.actionButtons}>
         <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
           <TrashIcon size={20} color={Colors.reds[500]} />
-          <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
+          <ThemedText style={styles.deleteButtonText}>
+            {t("common.delete")}
+          </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity style={styles.editButton} onPress={onEdit}>
           <PencilSimpleIcon size={20} color="white" />
-          <ThemedText style={styles.editButtonText}>Edit</ThemedText>
+          <ThemedText style={styles.editButtonText}>
+            {t("listings_screen.edit")}
+          </ThemedText>
         </TouchableOpacity>
       </View>
     );

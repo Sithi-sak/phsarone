@@ -98,6 +98,8 @@ export default function SubcategoryScreen() {
                 },
               ]}
               onPress={() => {
+                // Clear details when switching subcategory
+                updateDraft("details", {});
                 updateDraft("subCategory", item.name);
                 router.push("/sell/details");
               }}

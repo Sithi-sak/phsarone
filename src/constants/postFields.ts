@@ -1,10 +1,17 @@
+import {
+    POPULAR_BRANDS,
+    POPULAR_MATERIALS,
+    POPULAR_RAM,
+    POPULAR_STORAGE,
+} from "./PopularBrands";
+
 export const POST_FIELDS_MAP: Record<string, any[]> = {
   // Category 1: Electronics & Gadgets
   Phone: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Phone },
     { key: "model", label: "Model", required: true },
-    { key: "storage", label: "Storage" },
-    { key: "ram", label: "RAM" },
+    { key: "storage", label: "Storage", required: true, type: "select", options: POPULAR_STORAGE.Phone },
+    { key: "ram", label: "RAM", required: true, type: "select", options: POPULAR_RAM.Phone },
     {
       key: "condition",
       label: "Condition",
@@ -13,9 +20,9 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   Tablet: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Tablet },
     { key: "model", label: "Model", required: true },
-    { key: "storage", label: "Storage" },
+    { key: "storage", label: "Storage", type: "select", options: POPULAR_STORAGE.Tablet },
     { key: "screenSize", label: "Screen Size (inches)", type: "number" },
     {
       key: "condition",
@@ -25,8 +32,9 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   "Smart Watch": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Smart Watch"] },
     { key: "model", label: "Model", required: true },
+    { key: "storage", label: "Storage", type: "select", options: POPULAR_STORAGE["Smart Watch"] },
     { key: "compatibility", label: "Compatibility" },
     {
       key: "condition",
@@ -37,7 +45,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   "Phone Accessories": [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS["Phone Accessories"],
+    },
     { key: "compatibility", label: "Compatible With" },
     {
       key: "condition",
@@ -49,7 +62,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
 
   // Category 2: Vehicles
   Car: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Car },
     { key: "model", label: "Model", required: true },
     { key: "year", label: "Year", type: "number", required: true },
     { key: "mileage", label: "Mileage (km)", type: "number" },
@@ -69,7 +82,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   Bicycle: [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS.Bicycle,
+    },
     { key: "frameSize", label: "Frame Size" },
     { key: "gear", label: "Gear Count", type: "number" },
     {
@@ -80,7 +98,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   Motorcycle: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Motorcycle },
     { key: "model", label: "Model", required: true },
     { key: "year", label: "Year", type: "number", required: true },
     { key: "mileage", label: "Mileage (km)", type: "number" },
@@ -88,7 +106,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     { key: "color", label: "Color" },
   ],
   Lorries: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Lorries },
     { key: "model", label: "Model", required: true },
     { key: "year", label: "Year", type: "number", required: true },
     { key: "mileage", label: "Mileage (km)", type: "number" },
@@ -101,14 +119,14 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   Tractors: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Tractors },
     { key: "model", label: "Model", required: true },
     { key: "year", label: "Year", type: "number" },
     { key: "horsepower", label: "Horsepower", type: "number" },
     { key: "hours", label: "Engine Hours", type: "number" },
   ],
   "Tuk Tuk & Remork": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Tuk Tuk & Remork"] },
     { key: "model", label: "Model" },
     { key: "year", label: "Year", type: "number" },
     { key: "mileage", label: "Mileage (km)", type: "number" },
@@ -116,7 +134,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   "Parts & Accessories": [
     { key: "partType", label: "Part Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS["Parts & Accessories"],
+    },
     { key: "compatibility", label: "Compatible With" },
     {
       key: "condition",
@@ -127,7 +150,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   "Vehicles For Rent": [
     { key: "vehicleType", label: "Vehicle Type", required: true },
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Vehicles For Rent"] },
     { key: "model", label: "Model", required: true },
     { key: "year", label: "Year", type: "number" },
     { key: "dailyRate", label: "Daily Rate ($)", type: "number" },
@@ -136,21 +159,21 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
 
   // Category 3: Health & Beauty
   "Skin Care": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Skin Care"] },
     { key: "productName", label: "Product Name", required: true },
     { key: "skinType", label: "Skin Type" },
     { key: "size", label: "Size/Volume" },
     { key: "expiryDate", label: "Expiry Date" },
   ],
   "Hair Care": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Hair Care"] },
     { key: "productName", label: "Product Name", required: true },
     { key: "hairType", label: "Hair Type" },
     { key: "size", label: "Size/Volume" },
     { key: "expiryDate", label: "Expiry Date" },
   ],
   Makeup: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Makeup },
     { key: "productName", label: "Product Name", required: true },
     {
       key: "category",
@@ -162,7 +185,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     { key: "expiryDate", label: "Expiry Date" },
   ],
   "Natural & Organic": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Natural & Organic"] },
     { key: "productName", label: "Product Name", required: true },
     { key: "ingredients", label: "Main Ingredients" },
     { key: "certification", label: "Organic Certification" },
@@ -171,7 +194,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
 
   // Category 4: Home & Garden
   "Tables & Desks": [
-    { key: "material", label: "Material", required: true },
+    { key: "material", label: "Material", required: true, type: "select", options: POPULAR_MATERIALS["Tables & Desks"] },
     { key: "dimensions", label: "Dimensions (L x W x H)" },
     { key: "color", label: "Color" },
     {
@@ -182,7 +205,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   "Chairs & Sofas": [
-    { key: "material", label: "Material", required: true },
+    { key: "material", label: "Material", required: true, type: "select", options: POPULAR_MATERIALS["Chairs & Sofas"] },
     { key: "seats", label: "Number of Seats", type: "number" },
     { key: "color", label: "Color" },
     {
@@ -193,7 +216,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   "Wardrobes & Cabinets": [
-    { key: "material", label: "Material", required: true },
+    { key: "material", label: "Material", required: true, type: "select", options: POPULAR_MATERIALS["Wardrobes & Cabinets"] },
     { key: "doors", label: "Number of Doors", type: "number" },
     { key: "dimensions", label: "Dimensions (L x W x H)" },
     { key: "color", label: "Color" },
@@ -205,7 +228,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   "Shelves & Drawers": [
-    { key: "material", label: "Material", required: true },
+    { key: "material", label: "Material", required: true, type: "select", options: POPULAR_MATERIALS["Shelves & Drawers"] },
     { key: "shelves", label: "Number of Shelves/Drawers", type: "number" },
     { key: "dimensions", label: "Dimensions (L x W x H)" },
     {
@@ -223,7 +246,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
       type: "select",
       options: ["Single", "Double", "Queen", "King"],
     },
-    { key: "material", label: "Material" },
+    { key: "material", label: "Material", type: "select", options: POPULAR_MATERIALS["Beds & Mattresses"] },
     {
       key: "condition",
       label: "Condition",
@@ -239,7 +262,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
       type: "select",
       options: ["Curtain", "Carpet", "Rug"],
     },
-    { key: "material", label: "Material" },
+    { key: "material", label: "Material", type: "select", options: POPULAR_MATERIALS["Curtain & Carpet"] },
     { key: "dimensions", label: "Dimensions" },
     { key: "color", label: "Color" },
     {
@@ -251,8 +274,13 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   Kitchenware: [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
-    { key: "material", label: "Material" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS.Kitchenware,
+    },
+    { key: "material", label: "Material", type: "select", options: POPULAR_MATERIALS.Kitchenware },
     {
       key: "condition",
       label: "Condition",
@@ -262,7 +290,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   "Household Items": [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS["Household Items"],
+    },
     {
       key: "condition",
       label: "Condition",
@@ -286,7 +319,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   // Category 5: Fashion
   "Women's Fashion": [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS["Women's Fashion"],
+    },
     { key: "size", label: "Size", required: true },
     { key: "color", label: "Color" },
     {
@@ -298,7 +336,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   "Men's Fashion": [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS["Men's Fashion"],
+    },
     { key: "size", label: "Size", required: true },
     { key: "color", label: "Color" },
     {
@@ -310,7 +353,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   "Baby & Kids": [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS["Baby & Kids"],
+    },
     { key: "size", label: "Size/Age Range", required: true },
     { key: "color", label: "Color" },
     {
@@ -322,7 +370,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   "Fashion Accessories": [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS["Fashion Accessories"],
+    },
     { key: "material", label: "Material" },
     { key: "color", label: "Color" },
     {
@@ -335,11 +388,11 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
 
   // Category 6: Computers
   Laptop: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Laptop },
     { key: "model", label: "Model", required: true },
     { key: "processor", label: "Processor" },
-    { key: "ram", label: "RAM", required: true },
-    { key: "storage", label: "Storage", required: true },
+    { key: "ram", label: "RAM", required: true, type: "select", options: POPULAR_RAM.Laptop },
+    { key: "storage", label: "Storage", required: true, type: "select", options: POPULAR_STORAGE.Laptop },
     { key: "screenSize", label: "Screen Size (inches)", type: "number" },
     {
       key: "condition",
@@ -349,10 +402,11 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   Desktop: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Desktop },
+    { key: "model", label: "Model", required: true },
     { key: "processor", label: "Processor", required: true },
-    { key: "ram", label: "RAM", required: true },
-    { key: "storage", label: "Storage", required: true },
+    { key: "ram", label: "RAM", required: true, type: "select", options: POPULAR_RAM.Desktop },
+    { key: "storage", label: "Storage", required: true, type: "select", options: POPULAR_STORAGE.Desktop },
     { key: "graphics", label: "Graphics Card" },
     {
       key: "condition",
@@ -362,11 +416,11 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   "All in One": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["All in One"] },
     { key: "model", label: "Model", required: true },
     { key: "processor", label: "Processor" },
-    { key: "ram", label: "RAM", required: true },
-    { key: "storage", label: "Storage", required: true },
+    { key: "ram", label: "RAM", required: true, type: "select", options: POPULAR_RAM["All in One"] },
+    { key: "storage", label: "Storage", required: true, type: "select", options: POPULAR_STORAGE["All in One"] },
     { key: "screenSize", label: "Screen Size (inches)", type: "number" },
     {
       key: "condition",
@@ -383,7 +437,13 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
       type: "select",
       options: ["Monitor", "Printer", "Scanner", "All-in-One"],
     },
-    { key: "brand", label: "Brand", required: true },
+    {
+      key: "brand",
+      label: "Brand",
+      required: true,
+      type: "select",
+      options: POPULAR_BRANDS["Monitor Printer & Scanner"],
+    },
     { key: "model", label: "Model" },
     { key: "size", label: "Size/Specifications" },
     {
@@ -454,7 +514,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
 
   // Category 8: Electronics & Appliances
   "Washing Machines": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Washing Machines"] },
     { key: "model", label: "Model" },
     { key: "capacity", label: "Capacity (kg)", type: "number" },
     {
@@ -471,7 +531,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   Fridges: [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Fridges },
     { key: "model", label: "Model" },
     { key: "capacity", label: "Capacity (L)", type: "number" },
     {
@@ -488,7 +548,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   "Air Conditioning": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Air Conditioning"] },
     { key: "model", label: "Model" },
     { key: "btu", label: "BTU/Cooling Capacity", type: "number" },
     {
@@ -506,7 +566,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   Tools: [
     { key: "type", label: "Tool Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS.Tools,
+    },
     {
       key: "powerSource",
       label: "Power Source",
@@ -522,7 +587,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   Machinery: [
     { key: "type", label: "Machinery Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS.Machinery,
+    },
     { key: "model", label: "Model" },
     { key: "year", label: "Year", type: "number" },
     {
@@ -533,7 +603,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     },
   ],
   "Security Camera": [
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Security Camera"] },
     {
       key: "type",
       label: "Type",
@@ -562,7 +632,7 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
       type: "select",
       options: ["TV", "Soundbar", "Speakers", "Home Theater"],
     },
-    { key: "brand", label: "Brand", required: true },
+    { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["TVs & Audio"] },
     { key: "model", label: "Model" },
     { key: "size", label: "Size/Specifications" },
     {
@@ -597,7 +667,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
   ],
   Toys: [
     { key: "type", label: "Type", required: true },
-    { key: "brand", label: "Brand" },
+    {
+      key: "brand",
+      label: "Brand",
+      type: "select",
+      options: POPULAR_BRANDS.Toys,
+    },
     { key: "ageRange", label: "Age Range" },
     {
       key: "condition",
