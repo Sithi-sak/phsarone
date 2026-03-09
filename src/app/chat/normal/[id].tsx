@@ -1121,11 +1121,6 @@ export default function NormalProductChatScreen() {
                 : isMuted
                   ? t("chat.muted")
                   : t("chat.offline")}
-              {otherUserOnline
-                ? t("chat.active_now")
-                : isMuted
-                  ? t("chat.muted")
-                  : t("chat.offline")}
             </ThemedText>
           </View>
         </View>

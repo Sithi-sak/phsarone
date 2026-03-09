@@ -3,6 +3,13 @@ import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { formatPrice, formatTimeAgo } from "@src/utils/productUtils";
+import {
+  createListingExpiryFromNow,
+  getDaysUntilListingExpiry,
+  getEffectiveListingStatus,
+  getListingExpiryDate,
+  normalizePlanType,
+} from "@src/utils/listingExpiry";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowsClockwiseIcon,
@@ -40,6 +47,7 @@ export default function MyListingsScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [userPlanType, setUserPlanType] = useState("regular");
 
   const fetchMyProducts = async () => {
     if (!userId) return;
@@ -48,19 +56,62 @@ export default function MyListingsScreen() {
       const token = await getToken();
       const authSupabase = createClerkSupabaseClient(token);
 
-      console.log(`Current User ID: ${userId}`);
-      console.log(`Fetching products for status: ${status || "active"}`);
+      const [userResult, productResult] = await Promise.all([
+        authSupabase
+          .from("users")
+          .select("user_type")
+          .eq("id", userId)
+          .maybeSingle(),
+        authSupabase
+          .from("products")
+          .select("*")
+          .eq("seller_id", userId)
+          .order("created_at", { ascending: false }),
+      ]);
 
-      const { data, error } = await authSupabase
-        .from("products")
-        .select("*")
-        .eq("seller_id", userId)
-        .eq("status", status || "active")
-        .order("created_at", { ascending: false });
+      if (userResult.error) throw userResult.error;
+      if (productResult.error) throw productResult.error;
 
-      if (error) throw error;
-      console.log(`Found ${data?.length || 0} products`);
-      setProducts(data || []);
+      const normalizedPlan = normalizePlanType(userResult.data?.user_type);
+      setUserPlanType(normalizedPlan);
+
+      const allProducts = productResult.data || [];
+
+      const expiredIds = allProducts
+        .filter((item) => {
+          const effectiveStatus = getEffectiveListingStatus(item.status, {
+            createdAt: item.created_at,
+            metadata: item.metadata as Record<string, any> | null,
+            planType: normalizedPlan,
+          });
+
+          return effectiveStatus === "expired" && item.status !== "expired";
+        })
+        .map((item) => item.id);
+
+      if (expiredIds.length > 0) {
+        const { error: expireError } = await authSupabase
+          .from("products")
+          .update({ status: "expired" })
+          .eq("seller_id", userId)
+          .in("id", expiredIds);
+
+        if (expireError) {
+          console.error("Error syncing expired products:", expireError);
+        }
+      }
+
+      const requestedStatus = String(status || "active").toLowerCase();
+      const filtered = allProducts.filter((item) => {
+        const effectiveStatus = getEffectiveListingStatus(item.status, {
+          createdAt: item.created_at,
+          metadata: item.metadata as Record<string, any> | null,
+          planType: normalizedPlan,
+        });
+        return effectiveStatus === requestedStatus;
+      });
+
+      setProducts(filtered);
     } catch (error) {
       console.error("Error fetching my products:", error);
     } finally {
@@ -78,14 +129,27 @@ export default function MyListingsScreen() {
     setRefreshing(false);
   }, [userId, status]);
 
-  const handleUpdateStatus = async (id: string, newStatus: string) => {
+  const handleUpdateStatus = async (
+    id: string,
+    newStatus: string,
+    item?: any,
+  ) => {
     try {
       const token = await getToken();
       const authSupabase = createClerkSupabaseClient(token);
 
+      const updatePayload: Record<string, any> = { status: newStatus };
+
+      if (newStatus === "active") {
+        updatePayload.metadata = {
+          ...(item?.metadata || {}),
+          listing_expires_at: createListingExpiryFromNow(userPlanType),
+        };
+      }
+
       const { error } = await authSupabase
         .from("products")
-        .update({ status: newStatus })
+        .update(updatePayload)
         .eq("id", id);
 
       if (!error) fetchMyProducts();
@@ -133,6 +197,20 @@ export default function MyListingsScreen() {
           </ThemedText>
           <ThemedText style={styles.price}>
             {formatPrice(item.price, item.metadata?.currency || "USD")}
+          </ThemedText>
+
+          <ThemedText style={styles.expiryText}>
+            {(() => {
+              const daysLeft = getDaysUntilListingExpiry({
+                createdAt: item.created_at,
+                metadata: item.metadata as Record<string, any> | null,
+                planType: userPlanType,
+              });
+              if (daysLeft == null) return "";
+              if (daysLeft <= 0) return "Expired";
+              if (daysLeft === 1) return "Expires in 1 day";
+              return `Expires in ${daysLeft} days`;
+            })()}
           </ThemedText>
 
           <View style={styles.statsRow}>
@@ -210,7 +288,7 @@ export default function MyListingsScreen() {
             </ThemedText>
             <TouchableOpacity
               style={styles.relistBtn}
-              onPress={() => handleUpdateStatus(item.id, "active")}
+              onPress={() => handleUpdateStatus(item.id, "active", item)}
             >
               <ArrowsCounterClockwiseIcon size={16} color="#fff" />
               <ThemedText style={styles.relistText}>
@@ -284,9 +362,52 @@ export default function MyListingsScreen() {
     </View>
   );
 
+  const renderExpiredItem = (item: any) => {
+    const expiryDate = getListingExpiryDate({
+      createdAt: item.created_at,
+      metadata: item.metadata as Record<string, any> | null,
+      planType: userPlanType,
+    });
+
+    const expiredDateLabel = expiryDate ? expiryDate.toLocaleDateString() : "-";
+
+    return (
+      <View style={[styles.card, { backgroundColor: themeColors.card }]}>
+        <View style={styles.cardContent}>
+          <Image
+            source={{
+              uri: item.images?.[0] || "https://via.placeholder.com/150",
+            }}
+            style={styles.image}
+          />
+          <View style={styles.details}>
+            <ThemedText style={styles.title} numberOfLines={1}>
+              {item.title}
+            </ThemedText>
+            <ThemedText style={styles.soldOn}>Expired on {expiredDateLabel}</ThemedText>
+
+            <View style={styles.soldPriceRow}>
+              <ThemedText style={styles.price}>
+                {formatPrice(item.price, item.metadata?.currency || "USD")}
+              </ThemedText>
+              <TouchableOpacity
+                style={styles.relistBtn}
+                onPress={() => handleUpdateStatus(item.id, "active", item)}
+              >
+                <ArrowsCounterClockwiseIcon size={16} color="#fff" />
+                <ThemedText style={styles.relistText}>Relist</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   const renderItem = ({ item }: { item: any }) => {
     if (status === "sold") return renderSoldItem(item);
     if (status === "draft") return renderDraftItem(item);
+    if (status === "expired") return renderExpiredItem(item);
     return renderActiveItem(item);
   };
 
@@ -404,6 +525,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     marginLeft: "auto",
   },
+  expiryText: {
+    fontSize: 11,
+    opacity: 0.7,
+    marginTop: 4,
+  },
   divider: {
     height: 1,
     marginVertical: 6,
@@ -505,3 +631,4 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
 });
+

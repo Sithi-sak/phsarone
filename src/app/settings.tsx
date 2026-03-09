@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
-import { Stack, useRouter } from "expo-router";
+import { Href, Stack, useRouter } from "expo-router";
 import {
   BellIcon,
   CaretLeftIcon,
@@ -22,7 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 interface SettingItemProps {
   icon: React.ElementType;
   label: string;
-  onPress?: () => void;
+  onPress: () => void;
   showSeparator?: boolean;
 }
 
@@ -35,25 +35,21 @@ const SettingItem = ({
   const themeColors = useThemeColor();
   return (
     <View>
-      <TouchableOpacity
-        style={styles.item}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
+      <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.7}>
         <View style={styles.itemLeft}>
           <Icon size={24} color={themeColors.text} weight="regular" />
           <ThemedText style={styles.itemLabel}>{label}</ThemedText>
         </View>
         <CaretRightIcon size={20} color={themeColors.text} />
       </TouchableOpacity>
-      {showSeparator && (
+      {showSeparator ? (
         <View
           style={[
             styles.separator,
             { backgroundColor: themeColors.text + "10" },
           ]}
         />
-      )}
+      ) : null}
     </View>
   );
 };
@@ -63,6 +59,8 @@ export default function SettingsScreen() {
   const { signOut } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
+
+  const goTo = (path: string) => () => router.push(path as Href);
 
   const handleSignOut = async () => {
     try {
@@ -76,29 +74,14 @@ export default function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.background }}>
-      <Stack.Screen
-        options={{
-          headerShown: false,
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Custom Header with White Status Bar */}
-      <SafeAreaView
-        edges={["top"]}
-        style={{ backgroundColor: themeColors.background }}
-      >
-        <View
-          style={[styles.header, { backgroundColor: themeColors.background }]}
-        >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
+      <SafeAreaView edges={["top"]} style={{ backgroundColor: themeColors.background }}>
+        <View style={[styles.header, { backgroundColor: themeColors.background }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <CaretLeftIcon size={24} color={themeColors.text} weight="bold" />
           </TouchableOpacity>
-          <ThemedText style={styles.headerTitle}>
-            {t("settings_screen.settings")}
-          </ThemedText>
+          <ThemedText style={styles.headerTitle}>{t("settings_screen.settings")}</ThemedText>
           <View style={{ width: 44 }} />
         </View>
       </SafeAreaView>
@@ -108,54 +91,58 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Group 1 */}
         <View style={[styles.card, { backgroundColor: themeColors.card }]}>
           <SettingItem
             icon={MapPinIcon}
             label={t("settings_screen.my_addresses")}
+            onPress={goTo("/settings/addresses")}
           />
           <SettingItem
             icon={UserCircleIcon}
             label={t("settings_screen.account_security")}
+            onPress={goTo("/settings/account-security")}
           />
           <SettingItem
             icon={CreditCardIcon}
             label={t("settings_screen.payment_settings")}
+            onPress={goTo("/settings/subscription")}
             showSeparator={false}
           />
         </View>
 
-        {/* Group 2 */}
         <View style={[styles.card, { backgroundColor: themeColors.card }]}>
           <SettingItem
             icon={GearSixIcon}
             label={t("settings_screen.general")}
+            onPress={goTo("/settings/general")}
           />
           <SettingItem
             icon={BellIcon}
             label={t("settings_screen.notifications")}
+            onPress={goTo("/settings/notifications")}
           />
           <SettingItem
             icon={LockIcon}
             label={t("settings_screen.privacy")}
+            onPress={goTo("/settings/privacy")}
             showSeparator={false}
           />
         </View>
 
-        {/* Group 3 */}
         <View style={[styles.card, { backgroundColor: themeColors.card }]}>
           <SettingItem
             icon={HeadphonesIcon}
             label={t("settings_screen.help_feedback")}
+            onPress={goTo("/settings/help-feedback")}
           />
           <SettingItem
             icon={InfoIcon}
             label={t("settings_screen.about_phsarone")}
+            onPress={goTo("/settings/about")}
             showSeparator={false}
           />
         </View>
 
-        {/* Sign Out Button */}
         <TouchableOpacity
           onPress={handleSignOut}
           style={[
@@ -164,9 +151,7 @@ export default function SettingsScreen() {
           ]}
           activeOpacity={0.7}
         >
-          <ThemedText
-            style={[styles.signOutText, { color: themeColors.background }]}
-          >
+          <ThemedText style={[styles.signOutText, { color: themeColors.background }]}>
             {t("settings_screen.sign_out")}
           </ThemedText>
         </TouchableOpacity>
@@ -180,14 +165,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingTop: 8,
     gap: 16,
+    padding: 16,
     paddingBottom: 40,
+    paddingTop: 8,
   },
   header: {
-    flexDirection: "row",
     alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 8,
     paddingVertical: 12,
@@ -200,21 +185,21 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   card: {
-    borderRadius: 16,
     borderCurve: "continuous",
-    overflow: "hidden",
+    borderRadius: 16,
     elevation: 2,
+    overflow: "hidden",
   },
   item: {
-    flexDirection: "row",
     alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-between",
     padding: 16,
     paddingVertical: 18,
   },
   itemLeft: {
-    flexDirection: "row",
     alignItems: "center",
+    flexDirection: "row",
     gap: 12,
   },
   itemLabel: {
@@ -224,18 +209,18 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     marginHorizontal: 16,
-    marginLeft: 52, // Aligns with text start
+    marginLeft: 52,
   },
   signOutButton: {
-    borderRadius: 99,
-    paddingVertical: 16,
     alignItems: "center",
-    justifyContent: "center",
-
+    borderRadius: 99,
     elevation: 2,
+    justifyContent: "center",
+    paddingVertical: 16,
   },
   signOutText: {
     fontSize: 16,
     fontWeight: "400",
   },
 });
+

@@ -394,3 +394,13 @@ entrypoint = "./functions/clerk-sync/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/clerk-sync/*.html" ]
+
+[functions.create-stripe-payment-intent]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/create-stripe-payment-intent/index.ts"
+
+[functions.confirm-stripe-payment]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/confirm-stripe-payment/index.ts"

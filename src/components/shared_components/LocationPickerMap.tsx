@@ -9,7 +9,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Image,
   Linking,
+  Platform,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -100,6 +102,13 @@ export default function LocationPickerMap({
 
   const styles = getStyles(themeColors);
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${markerCoord.latitude},${markerCoord.longitude}`;
+  const previewCoord = hasSelectedLocation ? markerCoord : DEFAULT_REGION;
+  const staticMapUrl =
+    `https://staticmap.openstreetmap.de/staticmap.php?center=${previewCoord.latitude},${previewCoord.longitude}` +
+    `&zoom=15&size=640x300&markers=${previewCoord.latitude},${previewCoord.longitude},red-pushpin`;
+  const hasAndroidMapsKey =
+    Platform.OS !== "android" ||
+    Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
 
   const CustomButton = ({
     title,
@@ -144,51 +153,79 @@ export default function LocationPickerMap({
   return (
     <>
       <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          initialRegion={
-            currentDraft.location.latitude
-              ? {
-                  ...currentDraft.location,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }
-              : DEFAULT_REGION
-          }
-          onPress={(e) => handleTap(e.nativeEvent.coordinate)}
-          scrollEnabled={true}
-          zoomEnabled={true}
-          pitchEnabled={false}
-          rotateEnabled={false}
-        >
-          {hasSelectedLocation && (
-            <Marker
-              coordinate={markerCoord}
-              draggable={!isConfirmed}
-              onDragEnd={(e) => handleDragEnd(e.nativeEvent.coordinate)}
-            />
-          )}
-        </MapView>
+        {hasAndroidMapsKey ? (
+          <>
+            <MapView
+              ref={mapRef}
+              style={styles.map}
+              initialRegion={
+                currentDraft.location.latitude
+                  ? {
+                      ...currentDraft.location,
+                      latitudeDelta: 0.01,
+                      longitudeDelta: 0.01,
+                    }
+                  : DEFAULT_REGION
+              }
+              onPress={(e) => handleTap(e.nativeEvent.coordinate)}
+              scrollEnabled={true}
+              zoomEnabled={true}
+              pitchEnabled={false}
+              rotateEnabled={false}
+            >
+              {hasSelectedLocation && (
+                <Marker
+                  coordinate={markerCoord}
+                  draggable={!isConfirmed}
+                  onDragEnd={(e) => handleDragEnd(e.nativeEvent.coordinate)}
+                />
+              )}
+            </MapView>
 
-        {isConfirmed && <View style={styles.mapOverlay} />}
+            {isConfirmed && <View style={styles.mapOverlay} />}
 
-        {/* Re-track location button */}
-        {!isConfirmed && (
-          <TouchableOpacity
-            style={[
-              styles.reTrackButton,
-              { backgroundColor: themeColors.background },
-            ]}
-            onPress={fetchCurrentLocation}
-            disabled={isRetracking}
-          >
-            {isRetracking ? (
-              <ActivityIndicator size="small" color={themeColors.tint} />
-            ) : (
-              <CrosshairIcon size={22} color={themeColors.tint} weight="bold" />
+            {!isConfirmed && (
+              <TouchableOpacity
+                style={[
+                  styles.reTrackButton,
+                  { backgroundColor: themeColors.background },
+                ]}
+                onPress={fetchCurrentLocation}
+                disabled={isRetracking}
+              >
+                {isRetracking ? (
+                  <ActivityIndicator size="small" color={themeColors.tint} />
+                ) : (
+                  <CrosshairIcon size={22} color={themeColors.tint} weight="bold" />
+                )}
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </>
+        ) : (
+          <View style={styles.mapFallback}>
+            <ThemedText style={styles.mapFallbackTitle}>
+              Static map preview
+            </ThemedText>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => Linking.openURL(mapUrl)}
+            >
+              <Image
+                source={{ uri: staticMapUrl }}
+                style={styles.mapFallbackPreview}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+            <ThemedText style={styles.mapFallbackSubtitle}>
+              Location is captured from your device GPS. Tap preview to open full map.
+            </ThemedText>
+            <CustomButton
+              title={t("sellSection.Retrack_Current_Location") || "Use current location"}
+              onPress={fetchCurrentLocation}
+              disabled={isRetracking}
+              style={styles.mapFallbackButton}
+            />
+          </View>
         )}
       </View>
 
@@ -238,6 +275,35 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     mapOverlay: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: "rgba(0,0,0,0.3)",
+    },
+    mapFallback: {
+      flex: 1,
+      paddingHorizontal: 14,
+      paddingVertical: 16,
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: themeColors.card,
+    },
+    mapFallbackTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      textAlign: "center",
+    },
+    mapFallbackSubtitle: {
+      fontSize: 12,
+      opacity: 0.75,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+    mapFallbackButton: {
+      marginTop: 8,
+    },
+    mapFallbackPreview: {
+      width: "100%",
+      height: 130,
+      borderRadius: 12,
+      marginTop: 4,
+      backgroundColor: themeColors.background,
     },
     reTrackButton: {
       position: "absolute",
@@ -298,3 +364,5 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       fontWeight: "bold",
     },
   });
+
+

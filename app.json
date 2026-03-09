@@ -44,7 +44,14 @@
       "expo-font",
       "expo-localization",
       "expo-system-ui",
-      "expo-audio"
+      "expo-audio",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.phsarone",
+          "enableGooglePay": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -16,7 +16,7 @@ import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { XIcon } from "phosphor-react-native";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -34,12 +34,20 @@ export default function AddTradeProductScreen() {
   const themeColors = useThemeColor();
   const { t } = useTranslation();
   const { draft, updateDraft, resetDraft } = useTradeDraft();
-  const { refreshProducts } = useTradeProducts();
+  const { refreshProducts, getProductById } = useTradeProducts();
   const { getToken, userId } = useAuth();
   const { user } = useUser();
-  const { isPrivate, targetUserId, tradeId } = useLocalSearchParams<{ isPrivate: string; targetUserId: string; tradeId: string }>();
+  const { isPrivate, targetUserId, tradeId, editId } = useLocalSearchParams<{
+    isPrivate?: string;
+    targetUserId?: string;
+    tradeId?: string;
+    editId?: string;
+  }>();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isEditMode = !!editId;
+  const editPrefilledRef = useRef(false);
+  const editProduct = isEditMode ? getProductById(editId as string) : undefined;
 
   // Product Information
   const [title, setTitle] = useState("");
@@ -62,11 +70,62 @@ export default function AddTradeProductScreen() {
   const [isLocationConfirmed, setIsLocationConfirmed] = useState(false);
 
   const conditionOptions = [
-    { label: t("condition.brand_new"), value: "Brand New" },
+          { label: t("condition.brand_new"), value: "Brand New" },
     { label: t("condition.good"), value: "Good" },
     { label: t("condition.fair"), value: "Fair" },
     { label: t("condition.poor"), value: "Poor" },
   ];
+
+  useEffect(() => {
+    if (!isEditMode || !editId || editPrefilledRef.current || !editProduct) return;
+
+    const normalizedCondition = String(editProduct.condition || "")
+      .replace(/_/g, " ")
+      .trim()
+      .toLowerCase();
+    const matchedCondition = conditionOptions.find(
+      (option) => option.value.toLowerCase() === normalizedCondition,
+    );
+
+    const rangeMatches = String(editProduct.estimatedTradeValueRange || "").match(
+      /\d+(\.\d+)?/g,
+    );
+    const minValue = rangeMatches?.[0] || "";
+    const maxValue = rangeMatches?.[1] || "";
+
+    const normalizedPhones = String(editProduct.telephone || "")
+      .split(/[\/,]/)
+      .map((phone) => phone.trim())
+      .filter(Boolean);
+
+    setTitle(editProduct.title || "");
+    setDescription(editProduct.description || "");
+    setCondition(matchedCondition?.value || editProduct.condition || "");
+    setOriginalPrice(
+      editProduct.originalPrice ? String(editProduct.originalPrice) : "",
+    );
+    setLookingForName(editProduct.lookingFor?.[0]?.name || "");
+    setLookingForDescription(editProduct.lookingFor?.[0]?.description || "");
+    setEstimatedMinValue(minValue);
+    setEstimatedMaxValue(maxValue);
+    setPhoneNumbers(normalizedPhones.length ? normalizedPhones : [""]);
+
+    updateDraft("photos", editProduct.images || []);
+    updateDraft("province", editProduct.province || null);
+    updateDraft("district", editProduct.district || null);
+    updateDraft("commune", editProduct.commune || null);
+    updateDraft("location", editProduct.coordinates || draft.location);
+
+    setIsLocationConfirmed(true);
+    editPrefilledRef.current = true;
+  }, [
+    conditionOptions,
+    draft.location,
+    editId,
+    editProduct,
+    isEditMode,
+    updateDraft,
+  ]);
 
   const handleConfirmLocation = (location: {
     latitude: number;
@@ -237,53 +296,71 @@ export default function AddTradeProductScreen() {
 
       const isPrivatePost = isPrivate === "true";
 
-      const { data: newTrade, error } = await authSupabase
-        .from("trades")
-        .insert({
-          owner_id: userId,
-          title: title.trim(),
-          description: description.trim(),
-          images: uploadedImages,
-          looking_for: lookingForName.trim(),
-          location_name: draft.province || null,
-          cash_adjustment: 0,
-          is_private: isPrivatePost,
-          target_user_id: targetUserId || null,
-          metadata: {
-            sellerName: ownerName,
-            condition: conditionLower,
-            originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
-            province: provinceKey,
-            district: draft.district || "",
-            commune: draft.commune || "",
-            coordinates: draft.location,
-            telephone: normalizedPhones.join(" / "),
-            estimatedTradeValueRange: estimatedRange,
-            lookingForName: lookingForName.trim(),
-            lookingForDescription: lookingForDescription.trim(),
-            owner: {
-              name: ownerName,
-              isVerified: false,
-              avatar: user?.imageUrl || "",
-            },
+      const tradePayload = {
+        title: title.trim(),
+        description: description.trim(),
+        images: uploadedImages,
+        looking_for: lookingForName.trim(),
+        location_name: draft.province || null,
+        cash_adjustment: 0,
+        metadata: {
+          sellerName: ownerName,
+          condition: conditionLower,
+          originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
+          province: provinceKey,
+          district: draft.district || "",
+          commune: draft.commune || "",
+          coordinates: draft.location,
+          telephone: normalizedPhones.join(" / "),
+          estimatedTradeValueRange: estimatedRange,
+          lookingForName: lookingForName.trim(),
+          lookingForDescription: lookingForDescription.trim(),
+          owner: {
+            name: ownerName,
+            isVerified: false,
+            avatar: user?.imageUrl || "",
           },
-          status: isPrivatePost ? "private" : "active",
-        })
-        .select("id")
-        .single();
+        },
+      };
 
-      if (error) {
-        throw error;
+      let createdTradeId: string | null = null;
+
+      if (isEditMode && editId) {
+        const { error } = await authSupabase
+          .from("trades")
+          .update(tradePayload)
+          .eq("id", editId)
+          .eq("owner_id", userId);
+
+        if (error) throw error;
+      } else {
+        const { data: newTrade, error } = await authSupabase
+          .from("trades")
+          .insert({
+            owner_id: userId,
+            ...tradePayload,
+            is_private: isPrivatePost,
+            target_user_id: targetUserId || null,
+            status: isPrivatePost ? "private" : "active",
+          })
+          .select("id")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        createdTradeId = newTrade?.id || null;
       }
 
       // If we are creating a private offer for a specific trade, create the offer too
-      if (isPrivatePost && tradeId && newTrade) {
+      if (!isEditMode && isPrivatePost && tradeId && createdTradeId) {
         const { error: offerError } = await authSupabase
           .from("trade_offers")
           .insert({
             trade_id: tradeId,
             bidder_id: userId,
-            offered_trade_id: newTrade.id,
+            offered_trade_id: createdTradeId,
             offered_item_desc: title.trim(),
             status: "pending",
           });
@@ -296,15 +373,22 @@ export default function AddTradeProductScreen() {
 
       await refreshProducts();
 
-      Alert.alert(t("success"), t("trade.alerts.post_success"), [
-        {
-          text: "OK",
-          onPress: () => {
-            resetDraft();
-            router.back();
+      Alert.alert(
+        t("success"),
+        isEditMode
+          ? t("sellSection.update_success", {
+              defaultValue: "Your trade product has been updated successfully!",
+            })
+          : t("trade.alerts.post_success"),
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              resetDraft();
+              router.back();
+            },
           },
-        },
-      ]);
+        ]);
     } catch (error) {
       console.error("Error posting trade product:", error);
       Alert.alert(t("error"), t("trade.alerts.post_failed"));
@@ -315,6 +399,7 @@ export default function AddTradeProductScreen() {
 
   return (
     <SafeAreaView
+      edges={["top"]}
       style={[styles.container, { backgroundColor: themeColors.background }]}
     >
       <KeyboardAvoidingView
@@ -338,7 +423,7 @@ export default function AddTradeProductScreen() {
             <XIcon size={24} color={themeColors.text} weight="bold" />
           </TouchableOpacity>
           <ThemedText style={styles.headerTitle} numberOfLines={1}>
-            {t("trade.add_new_product")}
+            {isEditMode ? t("sellSection.edit_listing") : t("trade.add_new_product")}
           </ThemedText>
           <View style={styles.headerSpacer} />
         </View>
@@ -437,11 +522,9 @@ export default function AddTradeProductScreen() {
             />
 
             {/* Trade Value Estimation */}
-            <View
-              style={[styles.divider, { backgroundColor: themeColors.border }]}
-            />
+            <View style={[{ backgroundColor: themeColors.border }]} />
 
-            <ThemedText style={[styles.sectionTitle, { marginTop: 20 }]}>
+            <ThemedText style={[styles.sectionTitle]}>
               {t("trade.estimated_trade_value_range")} *
             </ThemedText>
             <ThemedText style={styles.sectionSubtitle}>
@@ -530,18 +613,16 @@ export default function AddTradeProductScreen() {
             <ThemedText style={styles.sectionTitle}>
               {t("trade.location")} *
             </ThemedText>
-
-            <AddressDropdowns
-              currentDraft={draft}
-              onUpdateDraft={(key, value) => updateDraft(key as any, value)}
-            />
-
             <LocationPickerMap
               onConfirmLocation={handleConfirmLocation}
               currentDraft={draft}
               onUpdateDraft={(key, value) => updateDraft(key as any, value)}
               themeColors={themeColors}
               t={t}
+            />
+            <AddressDropdowns
+              currentDraft={draft}
+              onUpdateDraft={(key, value) => updateDraft(key as any, value)}
             />
           </ThemedCard>
 
@@ -552,7 +633,7 @@ export default function AddTradeProductScreen() {
             </ThemedText>
 
             {phoneNumbers.map((phone, index) => (
-              <View key={index} style={{ marginBottom: 16 }}>
+              <View key={index}>
                 <ThemedText
                   style={[{ fontSize: 14, fontWeight: "500", marginBottom: 8 }]}
                 >
@@ -613,11 +694,13 @@ export default function AddTradeProductScreen() {
             disabled={isSubmitting}
           >
             <ThemedText style={styles.submitButtonText}>
-              {isSubmitting ? t("chat.sending") : t("trade.post_trade_product")}
+              {isSubmitting
+                ? t("chat.sending")
+                : isEditMode
+                  ? t("sellSection.update")
+                  : t("trade.post_trade_product")}
             </ThemedText>
           </TouchableOpacity>
-
-          <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -659,7 +742,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
   },
   condition_sec: {
     marginBottom: 16,
@@ -679,15 +761,14 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   submitButton: {
-    padding: 16,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 99,
     alignItems: "center",
-    marginTop: 8,
   },
   submitButtonText: {
     color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "500",
   },
   phoneInputContainer: {
     flexDirection: "row",
@@ -708,9 +789,7 @@ const styles = StyleSheet.create({
   valueRangeContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 12,
   },
-
   valueInputWrapper: {
     flex: 1,
   },
@@ -726,7 +805,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   valueInput: {
-    paddingLeft: 28,
+    paddingLeft: 108,
   },
   rangeSeparator: {
     paddingBottom: 12,
@@ -752,3 +831,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+

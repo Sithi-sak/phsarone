@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../types/supabase';
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import { Database } from "../types/supabase";
+import { isListingExpired } from "../utils/listingExpiry";
 
-type Product = Database['public']['Tables']['products']['Row'];
+type Product = Database["public"]["Tables"]["products"]["Row"];
 
 export function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -13,17 +14,26 @@ export function useProducts() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('products')
+        .from("products")
         .select(`
           *,
-          seller:users(first_name, last_name, avatar_url),
+          seller:users(first_name, last_name, avatar_url, user_type),
           category:categories(name_key)
         `)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false });
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setProducts(data || []);
+
+      const visibleProducts = (data || []).filter((item: any) => {
+        return !isListingExpired({
+          createdAt: item.created_at,
+          metadata: item.metadata,
+          planType: item.seller?.user_type,
+        });
+      });
+
+      setProducts(visibleProducts as Product[]);
     } catch (e: any) {
       setError(e.message);
     } finally {

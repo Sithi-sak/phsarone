@@ -205,7 +205,7 @@ function SwipeableConversationItem({
               <ThemedText
                 style={[
                   styles.lastMessage,
-                  isUnread && { fontWeight: "600", color: themeColors.text },
+                  isUnread && { fontWeight: "500", color: themeColors.text },
                 ]}
                 numberOfLines={1}
               >
@@ -215,7 +215,7 @@ function SwipeableConversationItem({
                 <View
                   style={[
                     styles.unreadBadge,
-                    { backgroundColor: themeColors.tint },
+                    { backgroundColor: Colors.reds[500] },
                   ]}
                 >
                   <ThemedText style={styles.unreadText}>
@@ -237,16 +237,49 @@ export default function ChatScreen() {
   const themeColors = useThemeColor();
   const { userId, getToken } = useAuth();
   const { t } = useTranslation();
-  const { tab } = useLocalSearchParams<{ tab: string }>();
+  const params = useLocalSearchParams<{
+    tab?: string;
+    autoOpen?: string;
+    id?: string;
+    sellerId?: string;
+    sellerName?: string;
+    sellerAvatar?: string;
+    productTitle?: string;
+    productThumbnail?: string;
+    productPrice?: string;
+    productCurrency?: string;
+  }>();
+
   const [activeTab, setActiveTab] = useState<"regular" | "trade">("regular");
 
   useEffect(() => {
-    if (tab === "trade") {
+    if (params.tab === "trade") {
       setActiveTab("trade");
-    } else if (tab === "regular") {
+    } else if (params.tab === "regular") {
       setActiveTab("regular");
     }
-  }, [tab]);
+
+    // Auto-open logic for deep-linking/redirection
+    if (params.autoOpen && params.id) {
+      const { autoOpen, tab, ...chatParams } = params;
+
+      // Delay slightly to ensure tab state is settled
+      const timer = setTimeout(() => {
+        if (autoOpen === "trade") {
+          router.push({
+            pathname: "/chat/trade/[id]",
+            params: { id: params.id, ...chatParams },
+          });
+        } else if (autoOpen === "regular") {
+          router.push({
+            pathname: "/chat/normal/[id]",
+            params: { id: params.id, ...chatParams },
+          });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [params.tab, params.autoOpen, params.id]);
 
   const { conversations, loading, error, refresh } =
     useConversations(activeTab);
@@ -313,13 +346,17 @@ export default function ChatScreen() {
     >
       <View style={styles.header}>
         <ThemedText style={styles.headerTitle}>
-          {t("chat.messages")} ({conversations.length})
+          {t("chat.messages")}{" "}
+          <ThemedText style={styles.headerCount}>
+            ({conversations.length})
+          </ThemedText>
         </ThemedText>
       </View>
 
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
+          activeOpacity={0.8}
           style={[
             styles.tab,
             activeTab === "regular"
@@ -332,7 +369,7 @@ export default function ChatScreen() {
             style={[
               styles.tabText,
               activeTab === "regular"
-                ? { color: "white" }
+                ? { color: "white", fontWeight: "600" }
                 : { color: "#4B5563" },
             ]}
           >
@@ -340,6 +377,7 @@ export default function ChatScreen() {
           </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
+          activeOpacity={0.8}
           style={[
             styles.tab,
             activeTab === "trade"
@@ -351,7 +389,7 @@ export default function ChatScreen() {
           <ThemedText
             style={[
               styles.tabText,
-              activeTab === "trade" ? { color: "white" } : { color: "#4B5563" },
+              activeTab === "trade" ? { color: "white", fontWeight: "600" } : { color: "#4B5563" },
             ]}
           >
             {t("chat.trade")}
@@ -414,13 +452,16 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
+  },
+  headerCount: {
+    fontSize: 16,
+    fontWeight: "400",
+    opacity: 0.5,
   },
   tabContainer: {
     flexDirection: "row",
     marginHorizontal: 16,
-    gap: 8,
-    marginBottom: 16,
     gap: 8,
     marginBottom: 16,
   },
@@ -431,26 +472,49 @@ const styles = StyleSheet.create({
     borderRadius: 99,
   },
   tabText: {
-    fontWeight: "400",
     fontSize: 16,
   },
   rowContainer: {
     flex: 1,
   },
-
+  swipeContainer: {
+    position: "relative",
+  },
+  deleteAction: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: DELETE_WIDTH,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteButton: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#EF4444",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+  },
+  deleteText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   // Row content
   conversationItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginRight: 16,
-    backgroundColor: "#374151",
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    marginRight: 14,
+    backgroundColor: "#F3F4F6",
   },
   content: { flex: 1 },
   row: {
@@ -459,9 +523,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 4,
   },
-  name: { fontSize: 17, fontWeight: "600", flex: 1, marginRight: 10 },
-  time: { fontSize: 14, opacity: 0.4 },
-  lastMessage: { fontSize: 15, opacity: 0.5, flex: 1, marginRight: 10 },
+  name: { fontSize: 16, fontWeight: "700", flex: 1, marginRight: 10 },
+  time: { fontSize: 13, opacity: 0.4 },
+  lastMessage: { fontSize: 14, opacity: 0.5, flex: 1, marginRight: 10 },
   unreadBadge: {
     width: 20,
     height: 20,
@@ -470,6 +534,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   unreadText: { color: "white", fontSize: 11, fontWeight: "700" },
+  separator: { height: 1, marginLeft: 84 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  emptyStateContainer: { padding: 40, alignItems: "center", marginTop: 100 },
+  emptyStateContainer: { padding: 40, alignItems: "center", marginTop: 60 },
+  listContent: { paddingBottom: 100 },
 });

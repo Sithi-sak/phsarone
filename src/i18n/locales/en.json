@@ -486,6 +486,7 @@
     "today": "Today",
     "photo": "Photo",
     "voice": "Voice",
+    "type_your_message": "Type your message",
     "tap_to_open_map": "Tap To Open Map",
     "location": "Location",
     "tap_to_send": "Tap ✓ to send",
@@ -633,24 +634,30 @@
     "subscriptions": "Subscriptions",
     "per_month": "PER MONTH",
     "continue_with_plan": "Continue with this plan",
+    "default_description": "Built for active traders who need more reach.",
+    "trade_core_access": "Trade posting stays available for all accounts.",
     "starter": "Starter",
     "pro": "Pro",
     "business": "Business",
+    "descriptions": {
+      "starter": "For individuals growing their trade listings",
+      "pro": "For power sellers scaling inventory and visibility",
+      "business": "For high-volume shops and trading teams"
+    },
     "features": {
       "up_to_15_ads": "Up to 15 active ads",
       "ads_active_30_days": "Ads active for 30 days",
-      "trade_swap_enabled": "Trade & swap enabled",
-      "view_chat_count": "View count & chat count",
+      "basic_analytics": "Basic listing analytics",
       "free_weekly_boost": "1 free weekly boost",
       "up_to_50_ads": "Up to 50 active ads",
       "ads_active_60_days": "Ads active for 60 days",
-      "top_priority": "Top search priority",
+      "top_priority": "Priority ranking in search",
       "seller_profile": "Seller profile with rating & reviews",
       "5_boosts": "5 boosts / month",
       "unlimited_ads": "Unlimited ads",
       "ads_active_120_days": "Ads active for 120 days",
       "verified_badge": "Verified business badge",
-      "advanced_analytics": "Advanced analytics",
+      "advanced_analytics": "Advanced analytics dashboard",
       "unlimited_boosts": "Unlimited boosts"
     }
   },
@@ -691,3 +698,4 @@
     "verify": "Verify"
   }
 }
+

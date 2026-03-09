@@ -85,6 +85,16 @@ export default function ProfileScreen() {
 
   const avatarUrl = dbUser?.avatar_url || clerkUser?.imageUrl;
 
+  const accountType = String(dbUser?.user_type || "regular").toLowerCase();
+  const accountTypeLabel =
+    accountType === "starter"
+      ? `${t("subscription_screen.starter")} Plan`
+      : accountType === "pro"
+        ? `${t("subscription_screen.pro")} Plan`
+        : accountType === "business"
+          ? `${t("subscription_screen.business")} Plan`
+          : t("user_actions.regular_account");
+
   const toggleTheme = () => {
     setMode(theme === "light" ? "dark" : "light");
   };
@@ -206,7 +216,7 @@ export default function ProfileScreen() {
             <View style={styles.userTextContainer}>
               <ThemedText style={styles.userName}>{displayName}</ThemedText>
               <ThemedText style={styles.userType}>
-                {t("user_actions.regular_account")}
+                {accountTypeLabel}
               </ThemedText>
               <TouchableOpacity
                 style={styles.viewProfileBtn}
@@ -259,20 +269,24 @@ export default function ProfileScreen() {
             <GridItem
               icon={<ChartPieSliceIcon size={24} color={themeColors.text} />}
               label={t("user_actions.overview")}
+              onPress={() => router.push("/user/dashboard/overview" as Href)}
             />
             <GridItem
               icon={<ChartBarIcon size={24} color={themeColors.text} />}
               label={t("user_actions.insight")}
+              onPress={() => router.push("/user/dashboard/insight" as Href)}
             />
             <GridItem
               icon={<TagSimpleIcon size={24} color={themeColors.text} />}
               label={t("user_actions.myTrade")}
+              onPress={() => router.push("/user/dashboard/my-trades" as Href)}
             />
             <GridItem
               icon={
                 <PresentationChartIcon size={24} color={themeColors.text} />
               }
               label={t("user_actions.performance")}
+              onPress={() => router.push("/user/dashboard/performance" as Href)}
             />
           </ProfileSection>
 
@@ -305,11 +319,12 @@ export default function ProfileScreen() {
             <GridItem
               icon={<CardholderIcon size={24} color={themeColors.text} />}
               label={t("user_actions.billing")}
+              onPress={() => router.push("/settings/subscription" as Href)}
             />
             <GridItem
               icon={<HeadsetIcon size={24} color={themeColors.text} />}
               label={t("user_actions.helpCenter")}
-              onPress={() => router.push("/user/support" as Href)}
+              onPress={() => router.push("/settings/help-feedback" as Href)}
             />
           </View>
         </Animated.View>
@@ -464,3 +479,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
 });
+

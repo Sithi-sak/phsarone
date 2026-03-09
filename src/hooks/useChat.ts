@@ -67,9 +67,12 @@ export function useConversations(type: "regular" | "trade", productId?: string |
 
       const { data: convs, error: convError } = await convQuery.order("updated_at", { ascending: false });
       if (convError) throw convError;
-      if (!convs || convs.length === 0) { setConversations([]); return; }
+      const filteredConversations = (convs || []).filter(
+        (conv) => conv.buyer_id !== conv.seller_id,
+      );
+      if (filteredConversations.length === 0) { setConversations([]); return; }
 
-      const conversationIds = convs.map(c => c.id);
+      const conversationIds = filteredConversations.map(c => c.id);
 
       const { data: lastMessages, error: lastError } = await authSupabase
         .from('messages').select('conversations_id, content, created_at, sender_id')
@@ -81,7 +84,7 @@ export function useConversations(type: "regular" | "trade", productId?: string |
         .in('conversations_id', conversationIds).eq('is_read', false).neq('sender_id', userId);
       if (unreadError) throw unreadError;
 
-      setConversations(convs.map((conv: any) => {
+      setConversations(filteredConversations.map((conv: any) => {
         const lastMsg = (lastMessages || []).find(m => m.conversations_id === conv.id);
         return {
           ...conv,
@@ -146,6 +149,13 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
       const authSupabase = createClerkSupabaseClient(token);
       let currentConversation: Conversation | null = null;
 
+      if (!initialConversationId && sellerId && sellerId === userId) {
+        setConversation(null);
+        setMessages([]);
+        setError("You cannot start a chat with yourself.");
+        return;
+      }
+
       if (initialConversationId) {
         const { data, error: convError } = await authSupabase
           .from('conversations')
@@ -153,8 +163,24 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
           .eq('id', initialConversationId).single();
         if (convError) throw convError;
         currentConversation = data as Conversation;
+        if (
+          currentConversation?.buyer_id &&
+          currentConversation.buyer_id === currentConversation.seller_id
+        ) {
+          setConversation(null);
+          setMessages([]);
+          setError("Invalid conversation.");
+          return;
+        }
 
       } else if (productId && sellerId) {
+        if (sellerId === userId) {
+          setConversation(null);
+          setMessages([]);
+          setError("You cannot start a chat with yourself.");
+          return;
+        }
+
         const { data, error: findError } = await authSupabase
           .from('conversations')
           .select('*, buyer:users!conversations_buyer_id_fkey(*), seller:users!conversations_seller_id_fkey(*), product:products(id, title, images, metadata), trade:trades(*)')
@@ -174,6 +200,13 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
         }
 
       } else if (tradeId && sellerId) {
+        if (sellerId === userId) {
+          setConversation(null);
+          setMessages([]);
+          setError("You cannot start a chat with yourself.");
+          return;
+        }
+
         const { data, error: findError } = await authSupabase
           .from('conversations')
           .select('*, buyer:users!conversations_buyer_id_fkey(*), seller:users!conversations_seller_id_fkey(*), product:products(id, title, images, metadata), trade:trades(*)')
@@ -488,3 +521,4 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
     blockUser,
   };
 }
+

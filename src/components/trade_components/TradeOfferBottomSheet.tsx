@@ -5,10 +5,13 @@ import useThemeColor from "@src/hooks/useThemeColor";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { TradeProduct } from "@src/types/productTypes";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
   FlatList,
   Image,
   Modal,
@@ -19,6 +22,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "../shared_components/ThemedText";
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 interface TradeOfferBottomSheetProps {
   visible: boolean;
@@ -43,58 +48,114 @@ export default function TradeOfferBottomSheet({
   const { products: allProducts } = useTradeProducts();
 
   const [myItems, setMyItems] = useState<TradeProduct[]>([]);
-  const [loading, setLoading] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [sendingOffer, setSendingOffer] = useState(false);
 
+  // Use a fixed value for animation to ensure reliability
+  const slideAnim = useRef(new Animated.Value(600)).current;
+
   useEffect(() => {
-    if (visible && userId) {
-      // Filter items owned by me that are active
-      const owned = allProducts.filter(p => p.owner_id === userId && p.status === 'active');
-      setMyItems(owned);
+    if (visible) {
+      slideAnim.setValue(600);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 65,
+        friction: 11,
+        useNativeDriver: true,
+      }).start();
+
+      if (userId) {
+        const owned = allProducts.filter(
+          (p) => p.owner_id === userId && p.status === "active",
+        );
+        setMyItems(owned);
+      }
     }
   }, [visible, userId, allProducts]);
 
+  const handleClose = (callback?: () => void) => {
+    Animated.timing(slideAnim, {
+      toValue: 600,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose();
+      if (callback) callback();
+    });
+  };
+
   const handleSendOffer = async () => {
     if (!selectedItemId || !userId) return;
+    if (targetOwnerId === userId) {
+      Alert.alert(t("common.error"), "You cannot send a trade offer to your own listing.");
+      return;
+    }
 
     setSendingOffer(true);
     try {
       const token = await getToken();
       const authSupabase = createClerkSupabaseClient(token);
-      
-      const selectedItem = myItems.find(p => p.id === selectedItemId);
 
-      const { error } = await authSupabase
-        .from("trade_offers")
-        .insert({
-          trade_id: targetTradeId,
-          bidder_id: userId,
-          offered_trade_id: selectedItemId,
-          offered_item_desc: selectedItem?.title || "Trade Item",
-          status: "pending",
-        });
+      const selectedItem = myItems.find((p) => p.id === selectedItemId);
+
+      const { error } = await authSupabase.from("trade_offers").insert({
+        trade_id: targetTradeId,
+        bidder_id: userId,
+        offered_trade_id: selectedItemId,
+        offered_item_desc: selectedItem?.title || "Trade Item",
+        status: "pending",
+      });
 
       if (error) throw error;
 
-      onOfferSent?.();
-      onClose();
+      const targetTrade = allProducts.find((p) => p.id === targetTradeId);
+      const sellerName =
+        targetTrade?.owner?.name || targetTrade?.seller || "Trade Seller";
+      const sellerAvatar = targetTrade?.owner?.avatar || "";
+      const productTitle = targetTrade?.title || "";
+      const productThumbnail = targetTrade?.images?.[0] || "";
+      const productPrice = String(targetTrade?.originalPrice ?? "");
+
+      // CRITICAL: Close this bottom sheet modal first
+      handleClose(() => {
+        // Dismiss all current modals (like the Trade Detail screen)
+        router.dismissAll();
+        
+        // Navigate to the main Chat tab and provide auto-open instructions
+        router.replace({
+          pathname: "/(tabs)/chat",
+          params: {
+            tab: "trade",
+            autoOpen: "trade",
+            id: targetTradeId,
+            sellerId: targetOwnerId,
+            sellerName,
+            sellerAvatar,
+            productTitle,
+            productThumbnail,
+            productPrice,
+            productCurrency: "USD",
+          }
+        });
+        
+        onOfferSent?.();
+      });
     } catch (err: any) {
       console.error("Error sending trade offer:", err);
-    } finally {
       setSendingOffer(false);
     }
   };
 
   const handleAddPost = () => {
-    onClose();
-    router.push({
-      pathname: "/trade/AddTradeProductScreen",
-      params: { 
-        isPrivate: "true", 
-        targetUserId: targetOwnerId,
-        tradeId: targetTradeId 
-      }
+    handleClose(() => {
+      router.push({
+        pathname: "/trade/AddTradeProductScreen",
+        params: {
+          isPrivate: "true",
+          targetUserId: targetOwnerId,
+          tradeId: targetTradeId,
+        },
+      });
     });
   };
 
@@ -102,84 +163,111 @@ export default function TradeOfferBottomSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      animationType="fade"
+      onRequestClose={() => handleClose()}
+      statusBarTranslucent
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
+      <Pressable style={styles.overlay} onPress={() => handleClose()}>
+        <Animated.View
           style={[
             styles.sheet,
             {
               backgroundColor: themeColors.card,
-              paddingBottom: insets.bottom + 20,
+              transform: [{ translateY: slideAnim }],
             },
           ]}
         >
-          <View style={[styles.handle, { backgroundColor: themeColors.border }]} />
-          
-          <ThemedText style={styles.title}>
-            {t("trade.select_item_to_offer")}
-          </ThemedText>
+          {/* Internal Pressable to prevent clicks on sheet from closing it */}
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={styles.header}>
+              <View
+                style={[styles.handle, { backgroundColor: themeColors.border }]}
+              />
+              <ThemedText style={styles.title}>
+                {t("trade.select_item_to_offer")}
+              </ThemedText>
+            </View>
 
-          <FlatList
-            data={myItems}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            style={styles.list}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.itemRow,
-                  {
-                    backgroundColor: themeColors.secondaryBackground,
-                    borderColor: selectedItemId === item.id ? themeColors.primary : "transparent",
-                    borderWidth: 2,
-                  },
-                ]}
-                onPress={() => setSelectedItemId(item.id)}
-              >
-                <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
-                <ThemedText style={styles.itemName} numberOfLines={1}>
-                  {item.title}
-                </ThemedText>
-              </TouchableOpacity>
-            )}
-            ListFooterComponent={
-              <View style={styles.footer}>
-                <View style={styles.addPostRow}>
-                  <ThemedText style={styles.addPostText}>
-                    {t("trade.dont_have_item_listed")}
-                  </ThemedText>
-                  <TouchableOpacity style={styles.addPostBtn} onPress={handleAddPost}>
-                    <ThemedText style={styles.addPostBtnText}>
-                      {t("trade.add_post")}
-                    </ThemedText>
-                  </TouchableOpacity>
-                </View>
-
+            <FlatList
+              data={myItems}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              style={styles.list}
+              contentContainerStyle={{
+                paddingHorizontal: 20,
+                paddingBottom: Math.max(insets.bottom, 24),
+              }}
+              renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
-                    styles.submitBtn,
-                    { 
-                      backgroundColor: selectedItemId ? Colors.blues[500] : "#E5E7EB",
-                      opacity: sendingOffer ? 0.7 : 1
+                    styles.itemRow,
+                    {
+                      backgroundColor: themeColors.secondaryBackground,
+                      borderColor:
+                        selectedItemId === item.id
+                          ? themeColors.primary
+                          : "transparent",
+                      borderWidth: 2,
                     },
                   ]}
-                  disabled={!selectedItemId || sendingOffer}
-                  onPress={handleSendOffer}
+                  onPress={() => setSelectedItemId(item.id)}
                 >
-                  {sendingOffer ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <ThemedText style={[styles.submitBtnText, { color: selectedItemId ? "#fff" : "#9CA3AF" }]}>
-                      {t("trade.send_trade_offer")}
-                    </ThemedText>
-                  )}
+                  <Image
+                    source={{ uri: item.images[0] }}
+                    style={styles.itemImage}
+                  />
+                  <ThemedText style={styles.itemName} numberOfLines={1}>
+                    {item.title}
+                  </ThemedText>
                 </TouchableOpacity>
-              </View>
-            }
-          />
-        </Pressable>
+              )}
+              ListFooterComponent={
+                <View style={styles.footer}>
+                  <View style={styles.addPostRow}>
+                    <ThemedText style={styles.addPostText}>
+                      {t("trade.dont_have_item_listed")}
+                    </ThemedText>
+                    <TouchableOpacity
+                      style={styles.addPostBtn}
+                      onPress={handleAddPost}
+                    >
+                      <ThemedText style={styles.addPostBtnText}>
+                        {t("trade.add_post")}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.submitBtn,
+                      {
+                        backgroundColor: selectedItemId
+                          ? Colors.blues[500]
+                          : "#E5E7EB",
+                        opacity: sendingOffer ? 0.7 : 1,
+                      },
+                    ]}
+                    disabled={!selectedItemId || sendingOffer}
+                    onPress={handleSendOffer}
+                  >
+                    {sendingOffer ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <ThemedText
+                        style={[
+                          styles.submitBtnText,
+                          { color: selectedItemId ? "#fff" : "#9CA3AF" },
+                        ]}
+                      >
+                        {t("trade.send_trade_offer")}
+                      </ThemedText>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              }
+            />
+          </Pressable>
+        </Animated.View>
       </Pressable>
     </Modal>
   );
@@ -188,14 +276,17 @@ export default function TradeOfferBottomSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "flex-end",
   },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingHorizontal: 20,
     maxHeight: "80%",
+    width: "100%",
+  },
+  header: {
+    paddingHorizontal: 20,
   },
   handle: {
     width: 40,
@@ -203,12 +294,12 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: "center",
     marginTop: 12,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   title: {
     fontSize: 18,
     fontWeight: "700",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   list: {
     flexGrow: 0,
@@ -267,3 +358,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+

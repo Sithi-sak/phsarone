@@ -3,6 +3,10 @@ import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system/legacy";
 import { useState } from "react";
 import { createClerkSupabaseClient } from "../lib/supabase";
+import {
+  createListingExpiryFromNow,
+  normalizePlanType,
+} from "../utils/listingExpiry";
 
 // Mapping frontend category keys ("1", "2"...) to the fixed database UUIDs
 const CATEGORY_UUID_MAP: Record<string, string> = {
@@ -17,7 +21,9 @@ const CATEGORY_UUID_MAP: Record<string, string> = {
 };
 
 // Reverse map for editing
-const UUID_TO_CATEGORY_ID: Record<string, string> = Object.entries(CATEGORY_UUID_MAP).reduce((acc, [key, value]) => {
+const UUID_TO_CATEGORY_ID: Record<string, string> = Object.entries(
+  CATEGORY_UUID_MAP,
+).reduce((acc, [key, value]) => {
   acc[value] = key;
   return acc;
 }, {} as Record<string, string>);
@@ -28,13 +34,16 @@ export function usePostProduct() {
 
   const uploadImage = async (uri: string, supabase: any) => {
     // If it's already a public URL (e.g. from an existing product), skip upload
-    if (uri.startsWith('http')) return uri;
+    if (uri.startsWith("http")) return uri;
 
     try {
-      if (!userId) throw new Error("User ID is missing. Please sign in again.");
+      if (!userId)
+        throw new Error("User ID is missing. Please sign in again.");
 
-      const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
-      
+      const fileName = `${userId}/${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(7)}.jpg`;
+
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: "base64",
       });
@@ -49,9 +58,9 @@ export function usePostProduct() {
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("product-images")
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("product-images").getPublicUrl(fileName);
 
       return publicUrl;
     } catch (error) {
@@ -60,14 +69,43 @@ export function usePostProduct() {
     }
   };
 
-  const prepareProductData = async (draft: any, supabase: any) => {
+  const fetchUserPlanType = async (supabase: any) => {
+    if (!userId) return "regular";
+
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("user_type")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return normalizePlanType(data?.user_type);
+    } catch (error) {
+      console.warn("Failed to resolve user plan type, defaulting to regular:", error);
+      return "regular";
+    }
+  };
+
+  const prepareProductData = async (
+    draft: any,
+    supabase: any,
+    userPlanType: string,
+  ) => {
     // 1. Map category
     const dbCategoryId = CATEGORY_UUID_MAP[draft.categoryId] || null;
 
     // 2. Upload all images first
     const imageUrls = await Promise.all(
-      draft.photos.map((uri: string) => uploadImage(uri, supabase))
+      draft.photos.map((uri: string) => uploadImage(uri, supabase)),
     );
+
+    const existingMetadata = (draft.details || {}) as Record<string, any>;
+    const listingExpiresAt =
+      typeof existingMetadata.listing_expires_at === "string" &&
+      existingMetadata.listing_expires_at.length > 0
+        ? existingMetadata.listing_expires_at
+        : createListingExpiryFromNow(userPlanType);
 
     // 3. Prepare the data
     return {
@@ -80,7 +118,7 @@ export function usePostProduct() {
       images: imageUrls,
       location_name: draft.province || "Unknown",
       metadata: {
-        ...draft.details,
+        ...existingMetadata,
         currency: draft.currency,
         district: draft.district,
         commune: draft.commune,
@@ -88,9 +126,10 @@ export function usePostProduct() {
         mainCategory: draft.mainCategory || "",
         subCategory: draft.subCategory || "",
         discountType: draft.discountType,
-        discountValue: draft.discountValue
+        discountValue: draft.discountValue,
+        listing_expires_at: listingExpiresAt,
       },
-      status: 'active'
+      status: "active",
     };
   };
 
@@ -100,7 +139,8 @@ export function usePostProduct() {
     try {
       const token = await getToken();
       const supabase = createClerkSupabaseClient(token);
-      const productData = await prepareProductData(draft, supabase);
+      const userPlanType = await fetchUserPlanType(supabase);
+      const productData = await prepareProductData(draft, supabase, userPlanType);
 
       const { data, error } = await supabase
         .from("products")
@@ -121,12 +161,13 @@ export function usePostProduct() {
     try {
       const token = await getToken();
       const supabase = createClerkSupabaseClient(token);
-      const productData = await prepareProductData(draft, supabase);
+      const userPlanType = await fetchUserPlanType(supabase);
+      const productData = await prepareProductData(draft, supabase, userPlanType);
 
       const { data, error } = await supabase
         .from("products")
         .update(productData)
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -142,9 +183,9 @@ export function usePostProduct() {
       const token = await getToken();
       const supabase = createClerkSupabaseClient(token);
       const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', id)
+        .from("products")
+        .select("*")
+        .eq("id", id)
         .single();
 
       if (error) throw error;
@@ -154,7 +195,9 @@ export function usePostProduct() {
 
       // Map DB data back to Draft structure
       return {
-        categoryId: data.category_id ? (UUID_TO_CATEGORY_ID[data.category_id] || "") : "",
+        categoryId: data.category_id
+          ? UUID_TO_CATEGORY_ID[data.category_id] || ""
+          : "",
         subCategory: metadata.subCategory || "",
         photos: data.images || [],
         title: data.title || "",
@@ -169,7 +212,12 @@ export function usePostProduct() {
         location: metadata.location || { latitude: 11.5564, longitude: 104.9282 },
         district: metadata.district || "",
         commune: metadata.commune || "",
-        contact: { chatOnly: true, sellerName: "", phones: [""] as string[], email: "" }, 
+        contact: {
+          chatOnly: true,
+          sellerName: "",
+          phones: [""] as string[],
+          email: "",
+        },
       };
     } catch (error) {
       console.error("Fetch for edit error:", error);

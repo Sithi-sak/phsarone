@@ -1,8 +1,9 @@
+import { useAuth } from "@clerk/clerk-expo";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
-import TradeOfferBottomSheet from "@src/components/trade_components/TradeOfferBottomSheet";
 import { Colors } from "@src/constants/Colors";
 import { useTradeProducts } from "@src/context/TradeProductsContext";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { formatPrice } from "@src/types/productTypes";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -10,6 +11,7 @@ import {
   CheckCircleIcon,
   LightbulbIcon,
 } from "phosphor-react-native";
+import TradeOfferBottomSheet from "@src/components/trade_components/TradeOfferBottomSheet";
 import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -30,7 +32,9 @@ export default function TradeProductDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const { t } = useTranslation();
-  const { getProductById } = useTradeProducts();
+  const { getProductById, refreshProducts } = useTradeProducts();
+  const { userId, getToken } = useAuth();
+
   const [showOfferSheet, setShowOfferSheet] = useState(false);
 
   const product = getProductById(id as string);
@@ -65,6 +69,7 @@ export default function TradeProductDetailScreen() {
   }, [product]);
 
   const ownerAvatar = product?.owner?.avatar || "";
+  const isOwner = !!userId && product?.owner_id === userId;
 
   const handleOpenMap = () => {
     if (!product?.coordinates) {
@@ -83,6 +88,63 @@ export default function TradeProductDetailScreen() {
       ?.replace(/[^0-9+]/g, "");
     if (!primaryPhone) return;
     Linking.openURL(`tel:${primaryPhone}`);
+  };
+  const handleEdit = () => {
+    if (!product?.id) return;
+    router.push({
+      pathname: "/trade/AddTradeProductScreen",
+      params: { editId: product.id },
+    });
+  };
+
+  const handleDelete = () => {
+    if (!product?.id) return;
+
+    Alert.alert(t("common.delete"), t("common.confirm_delete"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("common.delete"),
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const token = await getToken();
+            const authSupabase = createClerkSupabaseClient(token);
+            const { error } = await authSupabase
+              .from("trades")
+              .delete()
+              .eq("id", product.id)
+              .eq("owner_id", userId as string);
+            if (error) throw error;
+
+            await refreshProducts();
+            router.back();
+          } catch {
+            Alert.alert(
+              t("common.error"),
+              t("common.failed_to_delete_listing"),
+            );
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleChatWithOwner = () => {
+    if (!product?.id || !product.owner_id || isOwner) return;
+
+    router.push({
+      pathname: "/chat/trade/[id]",
+      params: {
+        id: product.id,
+        sellerId: product.owner_id,
+        sellerName: ownerName,
+        sellerAvatar: ownerAvatar,
+        productTitle: product.title,
+        productThumbnail: product.images?.[0] || "",
+        productPrice: String(product.originalPrice ?? ""),
+        productCurrency: "USD",
+      },
+    });
   };
 
   if (!product) {
@@ -406,36 +468,50 @@ export default function TradeProductDetailScreen() {
           },
         ]}
       >
-        <TouchableOpacity
-          style={[styles.btnChat, { backgroundColor: themeColors.primary }]}
-          onPress={() => {
-            // Navigate to main Chat tab with Trade category selected
-            router.push("/(tabs)/chat?tab=trade");
-          }}
-        >
-          <ThemedText style={styles.btnTextWhite}>
-            {t("trade.chat_with_owner")}
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.btnOffer, { backgroundColor: "#E5E7EB" }]}
-          onPress={() => setShowOfferSheet(true)}
-        >
-          <ThemedText style={styles.btnTextGrey}>
-            {t("trade.send_trade_offer")}
-          </ThemedText>
-        </TouchableOpacity>
+        {isOwner ? (
+          <>
+            <TouchableOpacity
+              style={[styles.btnChat, { backgroundColor: themeColors.primary }]}
+              onPress={handleEdit}
+            >
+              <ThemedText style={styles.btnTextWhite}>
+                {t("listings_screen.edit")}
+              </ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btnOffer, { backgroundColor: "#E5E7EB" }]}
+              onPress={handleDelete}
+            >
+              <ThemedText style={styles.btnTextGrey}>{t("common.delete")}</ThemedText>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[styles.btnChat, { backgroundColor: themeColors.primary }]}
+              onPress={handleChatWithOwner}
+            >
+              <ThemedText style={styles.btnTextWhite}>
+                {t("trade.chat_with_owner")}
+              </ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btnOffer, { backgroundColor: "#E5E7EB" }]}
+              onPress={() => setShowOfferSheet(true)}
+            >
+              <ThemedText style={styles.btnTextGrey}>
+                {t("trade.send_trade_offer")}
+              </ThemedText>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       <TradeOfferBottomSheet
         visible={showOfferSheet}
         onClose={() => setShowOfferSheet(false)}
-        targetTradeId={product.id}
-        targetOwnerId={product.owner_id || product.seller_id}
-        onOfferSent={() => {
-          Alert.alert(t("common.success"), t("trade.offer_sent_success"));
-          router.push("/(tabs)/chat?tab=trade");
-        }}
+        targetTradeId={id as string}
+        targetOwnerId={product.owner_id as string}
       />
     </View>
   );
@@ -625,7 +701,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     borderRadius: 16,
-    borderWidth: 1,
     gap: 12,
     marginBottom: 20,
   },
@@ -679,3 +754,4 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 });
+

@@ -9,17 +9,18 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
+  ArrowLeftIcon,
   CheckIcon,
   ChecksIcon,
+  DotsThreeVerticalIcon,
   ImageIcon,
   MapPinIcon,
   MicrophoneIcon,
   PaperPlaneTiltIcon,
+  PhoneCallIcon,
   PlusIcon,
-  ShoppingBagIcon,
   StopIcon,
   XIcon,
 } from "phosphor-react-native";
@@ -37,23 +38,22 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
-import ChatHeader from "@src/components/chat_components/ChatHeader";
-import ChatInputBar from "@src/components/chat_components/ChatInputBar";
 import ChatOptionsSheet from "@src/components/chat_components/ChatOptionsSheet";
-import ProductCard from "@src/components/chat_components/ProductCard";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { Colors } from "@src/constants/Colors";
 import { Message, useChat } from "@src/hooks/useChat";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { getOptimizedStorageImageUrl } from "@src/utils/storageImage";
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function formatDuration(sec: number) {
   const m = Math.floor(sec / 60)
     .toString()
@@ -288,80 +288,14 @@ function Bubble({
   );
 }
 
-// ─── Product Banner ───────────────────────────────────────────────────────────
-
-function ProductBanner({
-  title,
-  thumbnail,
-  price,
-  currency,
-  themeColors,
-  onPress,
-}: {
-  title?: string;
-  thumbnail?: string;
-  price?: string;
-  currency?: string;
-  themeColors: any;
-  onPress?: () => void;
-}) {
-  const { t } = useTranslation();
-  if (!title) return null;
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.8}
-      style={[
-        styles.productBanner,
-        {
-          backgroundColor: themeColors.card,
-          borderBottomColor: themeColors.border + "30",
-        },
-      ]}
-    >
-      <View
-        style={[
-          styles.productBannerIcon,
-          { backgroundColor: Colors.reds[500] + "18" },
-        ]}
-      >
-        {thumbnail ? (
-          <Image
-            source={{ uri: getOptimizedStorageImageUrl(thumbnail, "thumb") }}
-            style={styles.productThumb}
-          />
-        ) : (
-          <ShoppingBagIcon size={20} color={Colors.reds[500]} weight="fill" />
-        )}
-      </View>
-      <View style={{ flex: 1 }}>
-        <ThemedText
-          style={[styles.productBannerTitle, { color: themeColors.text }]}
-          numberOfLines={1}
-        >
-          {title}
-        </ThemedText>
-        {price ? (
-          <ThemedText style={styles.productBannerPrice}>
-            {currency || "USD"} {price}
-          </ThemedText>
-        ) : null}
-      </View>
-      <ThemedText
-        style={{ color: Colors.reds[500], fontSize: 12, fontWeight: "600" }}
-      >
-        {t("common.viewAll")}
-      </ThemedText>
-    </TouchableOpacity>
-  );
-}
-
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function TradeProductChatScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const themeColors = useThemeColor();
+  const insets = useSafeAreaInsets();
+  const composerBottomPadding = Math.max(10, Math.min(insets.bottom, 18));
   const { userId } = useAuth();
   const { t } = useTranslation();
 
@@ -416,6 +350,12 @@ export default function TradeProductChatScreen() {
     userId === conversation?.buyer_id
       ? conversation?.seller
       : conversation?.buyer;
+  const chatName =
+    `${otherUser?.first_name || ""} ${otherUser?.last_name || ""}`.trim() ||
+    (sellerName as string) ||
+    "Trader";
+  const chatAvatar =
+    String(otherUser?.avatar_url || "") || String(sellerAvatar || "");
 
   // Last message sent by me — for seen indicator
   const myMessages = messages.filter(
@@ -566,39 +506,6 @@ export default function TradeProductChatScreen() {
     }
   };
 
-  // ── Send location ──────────────────────────────────────────────────────────
-  const handleSendLocation = async () => {
-    setShowAttachMenu(false);
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(t("error"), "Please allow location access.");
-      return;
-    }
-    setIsSending(true);
-    try {
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const [geo] = await Location.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-      const label = geo
-        ? [geo.street, geo.city, geo.country].filter(Boolean).join(", ")
-        : undefined;
-      await sendMessage({
-        type: "location",
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        label,
-      });
-    } catch (e: any) {
-      Alert.alert(t("error"), e.message || "Failed to get location.");
-    } finally {
-      setIsSending(false);
-    }
-  };
-
   // ── Voice ──────────────────────────────────────────────────────────────────
   const startRecording = async () => {
     if (recorderState.isRecording) return;
@@ -691,37 +598,51 @@ export default function TradeProductChatScreen() {
     >
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* ── Header (shared) ── */}
-      <ChatHeader
-        name={sellerName as string}
-        isOnline={!!otherUserOnline}
-        themeColors={themeColors}
-        onOptionsPress={() => setShowOptionsMenu(true)}
-      />
+      <View
+        style={[styles.refHeader, { backgroundColor: themeColors.background }]}
+      >
+        <TouchableOpacity
+          style={[styles.refIconBtn, { backgroundColor: themeColors.card }]}
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+        >
+          <ArrowLeftIcon size={20} color={themeColors.text} weight="bold" />
+        </TouchableOpacity>
 
-      {/* ── Product card (shared) ── */}
-      <ProductCard
-        title={(productTitle as string) || conversation?.product?.title || ""}
-        thumbnail={
-          (productThumbnail as string) ||
-          (conversation?.product?.images?.[0] as string) ||
-          ""
-        }
-        price={
-          (productPrice as string) ||
-          String(conversation?.product?.metadata?.price || "")
-        }
-        currency={
-          (productCurrency as string) ||
-          conversation?.product?.metadata?.currency ||
-          "USD"
-        }
-        themeColors={themeColors}
-        onPress={() =>
-          router.push(`/product/${id || conversation?.product?.id}` as any)
-        }
-      />
+        <View style={styles.refCenterWrap}>
+          <View style={styles.refAvatarWrap}>
+            <Image
+              source={{ uri: chatAvatar || "https://via.placeholder.com/150" }}
+              style={styles.refAvatar}
+            />
+            {otherUserOnline ? <View style={styles.refOnlineDot} /> : null}
+          </View>
+          <ThemedText numberOfLines={1} style={styles.refName}>
+            {chatName}
+          </ThemedText>
+        </View>
 
+        <View style={styles.refActions}>
+          <TouchableOpacity
+            style={[styles.refIconBtn, { backgroundColor: themeColors.card }]}
+            onPress={handleCall}
+            activeOpacity={0.8}
+          >
+            <PhoneCallIcon size={19} color={themeColors.text} weight="fill" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.refIconBtn, { backgroundColor: themeColors.card }]}
+            onPress={() => setShowOptionsMenu(true)}
+            activeOpacity={0.8}
+          >
+            <DotsThreeVerticalIcon
+              size={20}
+              color={themeColors.text}
+              weight="bold"
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
       {/* ── Messages ── */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -742,23 +663,11 @@ export default function TradeProductChatScreen() {
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <View style={styles.dateSep}>
-              <View
-                style={[
-                  styles.dateLine,
-                  { backgroundColor: themeColors.border + "40" },
-                ]}
-              />
               <ThemedText
-                style={[styles.dateLabel, { color: themeColors.text + "50" }]}
+                style={[styles.dateLabel, { color: themeColors.text + "80" }]}
               >
                 {t("chat.today")}
               </ThemedText>
-              <View
-                style={[
-                  styles.dateLine,
-                  { backgroundColor: themeColors.border + "40" },
-                ]}
-              />
             </View>
           }
           renderItem={({ item }) => {
@@ -779,145 +688,142 @@ export default function TradeProductChatScreen() {
           }}
         />
 
-        {/* Recording bar */}
-        {isRecording && (
+        {isRecording ? (
           <View
             style={[
-              styles.recordBar,
+              styles.recordInline,
               {
                 backgroundColor: themeColors.card,
-                borderTopColor: themeColors.border + "30",
+                borderColor: themeColors.border,
               },
             ]}
           >
-            <TouchableOpacity
-              onPress={cancelRecording}
-              style={styles.recordCancel}
-            >
-              <XIcon size={20} color="#EF4444" weight="bold" />
-            </TouchableOpacity>
             <Animated.View
-              style={[styles.recordDot, { transform: [{ scale: pulseAnim }] }]}
+              style={[
+                styles.recordInlineDot,
+                { transform: [{ scale: pulseAnim }] },
+              ]}
             />
             <ThemedText
-              style={{
-                flex: 1,
-                fontWeight: "600",
-                color: themeColors.text,
-                fontSize: 16,
-              }}
+              style={[styles.recordInlineText, { color: themeColors.text }]}
             >
-              {formatDuration(recordingDuration)}
+              Recording {formatDuration(recordingDuration)}
             </ThemedText>
-            <ThemedText
-              style={{
-                color: themeColors.text + "55",
-                fontSize: 12,
-                marginRight: 10,
-              }}
+            <TouchableOpacity
+              onPress={cancelRecording}
+              style={styles.recordInlineCancel}
             >
-              {t("chat.tap_to_send")}
-            </ThemedText>
-            <TouchableOpacity onPress={stopAndSend} style={styles.recordSend}>
-              <PaperPlaneTiltIcon size={18} color="#fff" weight="fill" />
+              <XIcon size={16} color="#EF4444" weight="bold" />
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
-        {/* Attach menu */}
-        {showAttachMenu && !isRecording && (
-          <View
-            style={[
-              styles.attachMenu,
-              {
-                backgroundColor: themeColors.card,
-                borderTopColor: themeColors.border + "30",
-              },
-            ]}
-          >
+        {showAttachMenu && !isRecording ? (
+          <View style={styles.attachTray}>
             <TouchableOpacity
-              style={styles.attachItem}
+              style={[
+                styles.attachPill,
+                {
+                  backgroundColor: themeColors.card,
+                  borderColor: themeColors.border,
+                },
+              ]}
               onPress={handlePickImage}
             >
-              <View style={[styles.attachIcon, { backgroundColor: "#6366F1" }]}>
-                <ImageIcon size={22} color="#fff" weight="fill" />
-              </View>
+              <ImageIcon size={16} color={Colors.reds[500]} weight="fill" />
               <ThemedText
-                style={[styles.attachLabel, { color: themeColors.text }]}
+                style={[styles.attachPillText, { color: themeColors.text }]}
               >
                 {t("chat.photo")}
               </ThemedText>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.attachItem}
-              onPress={handleSendLocation}
-            >
-              <View style={[styles.attachIcon, { backgroundColor: "#10B981" }]}>
-                <MapPinIcon size={22} color="#fff" weight="fill" />
-              </View>
-              <ThemedText
-                style={[styles.attachLabel, { color: themeColors.text }]}
-              >
-                {t("chat.location")}
-              </ThemedText>
-            </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
-        {/* Input bar (shared input component + buttons) */}
-        {!isRecording && (
+        <View
+          style={[
+            styles.composerRow,
+            {
+              backgroundColor: themeColors.background,
+              paddingBottom: composerBottomPadding,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => setShowAttachMenu((v) => !v)}
+            style={[
+              styles.composerCircleBtn,
+              { backgroundColor: themeColors.card },
+            ]}
+            activeOpacity={0.85}
+          >
+            <PlusIcon
+              size={20}
+              color={showAttachMenu ? Colors.reds[500] : themeColors.text}
+              weight="bold"
+            />
+          </TouchableOpacity>
+
           <View
             style={[
-              styles.inputBar,
+              styles.composerInputWrap,
               {
-                backgroundColor: themeColors.background,
-                borderTopColor: themeColors.border + "30",
+                backgroundColor: themeColors.card,
+                borderColor: themeColors.border,
               },
             ]}
           >
-            <TouchableOpacity
-              onPress={() => setShowAttachMenu((v) => !v)}
-              style={[
-                styles.roundBtn,
-                {
-                  backgroundColor: showAttachMenu
-                    ? Colors.reds[500]
-                    : themeColors.card,
-                },
-              ]}
-            >
-              <PlusIcon
-                size={22}
-                color={showAttachMenu ? "#fff" : themeColors.text}
-                weight="bold"
-              />
-            </TouchableOpacity>
-
-            <ChatInputBar
+            <TextInput
               value={inputText}
-              onChange={(v: string) => {
+              onChangeText={(v) => {
                 setInputText(v);
                 if (showAttachMenu) setShowAttachMenu(false);
               }}
-              onSend={handleSendText}
-              themeColors={themeColors}
+              placeholder={
+                t("chat.type_your_message") || "Type your message..."
+              }
+              placeholderTextColor={themeColors.text + "66"}
+              style={[styles.composerInput, { color: themeColors.text }]}
+              multiline
+              maxLength={2000}
             />
-
-            {inputText.trim().length === 0 && (
-              <TouchableOpacity
-                onPressIn={startRecording}
-                onPressOut={stopAndSend}
-                style={[styles.roundBtn, { backgroundColor: themeColors.card }]}
-              >
-                <MicrophoneIcon
-                  size={22}
-                  color={isRecording ? Colors.reds[500] : themeColors.text}
-                  weight="fill"
-                />
-              </TouchableOpacity>
-            )}
           </View>
-        )}
+
+          {inputText.trim().length > 0 ? (
+            <TouchableOpacity
+              style={[
+                styles.composerCircleBtn,
+                { backgroundColor: Colors.reds[500] },
+              ]}
+              onPress={handleSendText}
+              activeOpacity={0.85}
+              disabled={isSending}
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <PaperPlaneTiltIcon size={18} color="#fff" weight="fill" />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPressIn={startRecording}
+              onPressOut={stopAndSend}
+              style={[
+                styles.composerCircleBtn,
+                { backgroundColor: themeColors.card },
+              ]}
+              activeOpacity={0.85}
+              disabled={isSending}
+            >
+              <MicrophoneIcon
+                size={18}
+                color={isRecording ? Colors.reds[500] : themeColors.text}
+                weight="fill"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
       </KeyboardAvoidingView>
 
       {/* ── Options sheet (shared component) ── */}
@@ -945,226 +851,219 @@ export default function TradeProductChatScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   centered: {
+    alignItems: "center",
     flex: 1,
     justifyContent: "center",
-    alignItems: "center",
     padding: 24,
   },
 
-  // Header
-  header: {
-    flexDirection: "row",
+  refHeader: {
     alignItems: "center",
-    paddingHorizontal: 12,
+    flexDirection: "row",
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderBottomWidth: 1,
   },
-  headerBtn: { padding: 6 },
-  headerCenter: {
+  refIconBtn: {
+    alignItems: "center",
+    borderRadius: 22,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  refCenterWrap: {
+    alignItems: "center",
     flex: 1,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 6,
+    marginHorizontal: 10,
   },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#E5E7EB",
+  refAvatarWrap: {
+    marginRight: 10,
+    position: "relative",
   },
-  onlineDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: "#10B981",
-    borderWidth: 2,
-    borderColor: "#fff",
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-  },
-  headerName: { fontSize: 16, fontWeight: "700" },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 2 },
-
-  // Product banner
-  productBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 12,
-    borderBottomWidth: 1,
-  },
-  productBannerIcon: {
-    width: 44,
+  refAvatar: {
+    borderRadius: 22,
     height: 44,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
+    width: 44,
   },
-  productThumb: { width: 44, height: 44, borderRadius: 10 },
-  productBannerTitle: { fontSize: 14, fontWeight: "600" },
-  productBannerPrice: {
-    fontSize: 13,
-    color: Colors.reds[500],
-    fontWeight: "600",
-    marginTop: 1,
+  refOnlineDot: {
+    backgroundColor: "#22C55E",
+    borderColor: "#fff",
+    borderRadius: 6,
+    borderWidth: 2,
+    bottom: -1,
+    height: 12,
+    position: "absolute",
+    right: -1,
+    width: 12,
+  },
+  refName: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  refActions: {
+    alignItems: "center",
+    columnGap: 8,
+    flexDirection: "row",
   },
 
-  // Messages
-  msgList: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 },
+  msgList: {
+    paddingBottom: 14,
+    paddingHorizontal: 14,
+    paddingTop: 4,
+  },
   dateSep: {
-    flexDirection: "row",
     alignItems: "center",
-    marginVertical: 16,
-    gap: 10,
+    marginVertical: 12,
   },
-  dateLine: { flex: 1, height: 1 },
-  dateLabel: { fontSize: 12, fontWeight: "500" },
+  dateLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
-  msgWrap: { marginBottom: 8, maxWidth: "80%" },
-  myWrap: { alignSelf: "flex-end", alignItems: "flex-end" },
-  otherWrap: { alignSelf: "flex-start", alignItems: "flex-start" },
-  bubble: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 18 },
-  myBubble: { borderTopRightRadius: 4 },
-  otherBubble: { borderTopLeftRadius: 4 },
-  imgBubble: { padding: 3, borderRadius: 16 },
-  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 3 },
-  msgTime: { fontSize: 11 },
-
-  imgMsg: { width: 200, height: 155, borderRadius: 13 },
-  locRow: {
-    flexDirection: "row",
+  msgWrap: {
+    marginBottom: 10,
+    maxWidth: "82%",
+  },
+  myWrap: {
+    alignItems: "flex-end",
+    alignSelf: "flex-end",
+  },
+  otherWrap: {
+    alignItems: "flex-start",
+    alignSelf: "flex-start",
+  },
+  bubble: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  myBubble: {
+    borderTopRightRadius: 16,
+  },
+  otherBubble: {
+    borderTopLeftRadius: 16,
+  },
+  imgBubble: {
+    borderRadius: 16,
+    padding: 3,
+  },
+  metaRow: {
     alignItems: "center",
-    minWidth: 150,
+    flexDirection: "row",
+    marginTop: 4,
+  },
+  msgTime: {
+    fontSize: 11,
+  },
+
+  imgMsg: {
+    borderRadius: 13,
+    height: 155,
+    width: 200,
+  },
+  locRow: {
+    alignItems: "center",
+    flexDirection: "row",
     maxWidth: 220,
+    minWidth: 150,
   },
   voiceRow: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    columnGap: 8,
+    flexDirection: "row",
     minWidth: 190,
   },
   voiceBtn: {
-    width: 30,
-    height: 30,
+    alignItems: "center",
     borderRadius: 15,
+    height: 30,
     justifyContent: "center",
-    alignItems: "center",
+    width: 30,
   },
-  voiceTrack: { flex: 1, height: 3, borderRadius: 2, overflow: "hidden" },
-  voiceFill: { height: 3, borderRadius: 2 },
-
-  // Recording bar
-  recordBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-    borderTopWidth: 1,
-  },
-  recordCancel: { padding: 4 },
-  recordDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#EF4444",
-  },
-  recordSend: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.reds[500],
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  // Attach menu
-  attachMenu: {
-    flexDirection: "row",
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    gap: 32,
-    borderTopWidth: 1,
-  },
-  attachItem: { alignItems: "center", gap: 8 },
-  attachIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  attachLabel: { fontSize: 12, fontWeight: "500" },
-
-  // Input bar
-  inputBar: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-    borderTopWidth: 1,
-  },
-  roundBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  inputWrap: {
-    flex: 1,
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    minHeight: 42,
-    justifyContent: "center",
-  },
-  textInput: { fontSize: 16, maxHeight: 100, paddingVertical: 8 },
-
-  // Options modal
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 14,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
+  voiceTrack: {
     borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
+    flex: 1,
+    height: 3,
+    overflow: "hidden",
   },
-  sheetTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 12,
+  voiceFill: {
+    borderRadius: 2,
+    height: 3,
   },
-  optRow: {
-    flexDirection: "row",
+
+  recordInline: {
     alignItems: "center",
-    gap: 14,
-    paddingVertical: 16,
-  },
-  optLabel: { fontSize: 16, fontWeight: "500" },
-  divider: { height: 1 },
-  cancelBtn: {
-    marginTop: 14,
+    borderRadius: 999,
     borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 14,
+    flexDirection: "row",
+    marginBottom: 8,
+    marginHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  recordInlineDot: {
+    backgroundColor: "#EF4444",
+    borderRadius: 5,
+    height: 10,
+    marginRight: 8,
+    width: 10,
+  },
+  recordInlineText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  recordInlineCancel: {
     alignItems: "center",
+    height: 24,
+    justifyContent: "center",
+    width: 24,
+  },
+
+  attachTray: {
+    flexDirection: "row",
+    marginBottom: 8,
+    paddingHorizontal: 14,
+  },
+  attachPill: {
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  attachPillText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  composerRow: {
+    alignItems: "center",
+    columnGap: 10,
+    flexDirection: "row",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  composerCircleBtn: {
+    alignItems: "center",
+    borderRadius: 22,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  composerInputWrap: {
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 46,
+    paddingHorizontal: 14,
+  },
+  composerInput: {
+    fontSize: 16,
+    maxHeight: 110,
+    paddingVertical: 12,
   },
 });
