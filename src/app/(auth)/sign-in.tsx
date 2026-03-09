@@ -63,30 +63,39 @@ export default function SignInPage() {
         password,
       });
 
+      console.log("Sign in attempt status:", signInAttempt.status);
+
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
         router.replace("/(tabs)");
+      } else if (signInAttempt.status === "needs_first_factor") {
+        // Account exists but needs verification
+        Alert.alert(
+          "Email Not Verified",
+          "Please verify your email address first. Go back to sign up and complete the verification process.",
+          [
+            {
+              text: "Go to Sign Up",
+              onPress: () => {
+                router.replace("/(auth)/sign-up");
+              },
+            },
+          ],
+        );
       } else if (signInAttempt.status === "needs_second_factor") {
         await signIn.prepareSecondFactor({
           strategy: "email_code",
         });
         setPendingVerification(true);
       } else {
+        console.log("Unexpected status:", signInAttempt.status);
         const errorMsg = "Invalid email or password";
         setError(errorMsg);
         Alert.alert("Sign In Failed", errorMsg);
       }
     } catch (err: any) {
-      let errorMsg = "Invalid email or password";
-
-      // Handle specific error types but don't reveal them
-      if (err.errors && err.errors.length > 0) {
-        // Generic message for any Clerk errors
-        errorMsg = "Invalid email or password";
-      } else if (err.message) {
-        errorMsg = "Invalid email or password";
-      }
-
+      console.log("Sign in error:", err);
+      const errorMsg = "Invalid account";
       setError(errorMsg);
       Alert.alert("Sign In Failed", errorMsg);
     }
@@ -106,10 +115,25 @@ export default function SignInPage() {
 
     try {
       setError("");
-      const signInAttempt = await signIn.attemptSecondFactor({
-        strategy: "email_code",
-        code,
-      });
+      console.log("Attempting to verify with code:", code);
+
+      // Try first factor (email verification) first
+      let signInAttempt;
+      try {
+        signInAttempt = await signIn.attemptFirstFactor({
+          strategy: "email_code",
+          code,
+        });
+      } catch (firstFactorErr) {
+        // If first factor fails, try second factor
+        console.log("First factor failed, trying second factor");
+        signInAttempt = await signIn.attemptSecondFactor({
+          strategy: "email_code",
+          code,
+        });
+      }
+
+      console.log("Verification attempt status:", signInAttempt.status);
 
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
@@ -120,6 +144,12 @@ export default function SignInPage() {
         Alert.alert("Verification Failed", errorMsg);
       }
     } catch (err: any) {
+      console.log("Verification error:", err);
+      console.log(
+        "Verification error details:",
+        JSON.stringify(err.errors, null, 2),
+      );
+
       let errorMsg = "Invalid or expired verification code";
 
       if (err.errors && err.errors.length > 0) {
@@ -135,22 +165,45 @@ export default function SignInPage() {
 
   if (pendingVerification) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Verify your email</Text>
-        <Text style={styles.subtitle}>
-          Enter the code sent to {emailAddress}
-        </Text>
-        <TextInput
-          value={code}
-          placeholder="Enter verification code"
-          onChangeText={setCode}
-          style={styles.input}
-          keyboardType="number-pad"
-        />
-        <TouchableOpacity onPress={onVerifyPress} style={styles.button}>
-          <Text style={styles.buttonText}>Verify</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardView}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Image
+              source={require("@src/assets/icons/Main-logo-24.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+
+            <Text style={styles.title}>Verify your email</Text>
+            <Text style={styles.subtitle}>
+              Enter the code sent to {emailAddress}
+            </Text>
+
+            <View style={styles.formContainer}>
+              <Text style={styles.label}>Verification Code</Text>
+              <TextInput
+                value={code}
+                placeholder="Enter verification code"
+                onChangeText={setCode}
+                style={styles.input}
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity onPress={onVerifyPress} style={styles.button}>
+                <Text style={styles.buttonText}>Verify</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     );
   }
 
@@ -159,7 +212,7 @@ export default function SignInPage() {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -210,9 +263,12 @@ export default function SignInPage() {
               </Pressable>
             </View>
 
-            <TouchableOpacity>
-              <Text style={styles.forgotPassword}>Forgot password?</Text>
-            </TouchableOpacity>
+            <Text
+              style={styles.forgotPassword}
+              onPress={() => router.push("/(auth)/forgot-password" as any)}
+            >
+              Forgot password?
+            </Text>
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
