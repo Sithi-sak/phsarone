@@ -1,7 +1,25 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { showIncomingChatNotification } from '../lib/notifications';
 import { createClerkSupabaseClient, supabase } from '../lib/supabase';
 import { Database } from '../types/supabase';
+import { parseContent } from '../utils/chatUtils';
+
+const notifiedMessageIds = new Set<string>();
+
+const buildNotificationBody = (rawContent: any): string => {
+  const content = parseContent(rawContent);
+  switch (content.type) {
+    case 'image':
+      return 'Sent a photo';
+    case 'voice':
+      return 'Sent a voice message';
+    case 'location':
+      return 'Shared a location';
+    default:
+      return content.text || content.message || 'New message';
+  }
+};
 
 export type Message = Database['public']['Tables']['messages']['Row'] & {
   sender?: Database['public']['Tables']['users']['Row'];
@@ -111,13 +129,176 @@ export function useConversations(type: "regular" | "trade", productId?: string |
 
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
-      .channel(`user_conversations:${userId}:${type}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `buyer_id=eq.${userId}` }, () => { fetchRef.current?.(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `seller_id=eq.${userId}` }, () => { fetchRef.current?.(); })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchRef.current?.(); })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    let isCancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const applyMessageInsertToConversations = (newMessage: any) => {
+      console.log('[Chat] Processing message insert:', {
+        messageId: newMessage.id,
+        conversationId: newMessage.conversations_id,
+        senderId: newMessage.sender_id,
+        currentUserId: userId,
+        isFromOtherUser: newMessage.sender_id !== userId,
+      });
+
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.id === newMessage.conversations_id);
+        console.log('[Chat] Conversation found in list:', idx !== -1, 'at index:', idx);
+        
+        if (idx === -1) {
+          console.log('[Chat] ⚠️ Conversation NOT in current list - skipping');
+          return prev;
+        }
+
+        const target = prev[idx];
+        const nextUnread =
+          newMessage.sender_id !== userId && !newMessage.is_read
+            ? (target.unread_count || 0) + 1
+            : (target.unread_count || 0);
+
+        const updated: Conversation = {
+          ...target,
+          last_message_content: newMessage.content,
+          last_message_at: newMessage.created_at,
+          last_message_sender_id: newMessage.sender_id,
+          unread_count: nextUnread,
+        };
+
+        // Move active conversation to top like common chat apps.
+        const next = [...prev];
+        next.splice(idx, 1);
+        next.unshift(updated);
+        console.log('[Chat] ✅ Conversation moved to top');
+
+        if (newMessage.sender_id !== userId && !notifiedMessageIds.has(newMessage.id)) {
+          console.log('[Chat] 🔔 Sending notification for message:', newMessage.id);
+          notifiedMessageIds.add(newMessage.id);
+          const senderUser =
+            (updated.buyer_id === newMessage.sender_id ? updated.buyer : updated.seller) ||
+            null;
+          const senderName =
+            `${senderUser?.first_name || ''} ${senderUser?.last_name || ''}`.trim() ||
+            'New message';
+
+          console.log('[Chat] Notification sender:', senderName);
+          showIncomingChatNotification({
+            title: senderName,
+            body: buildNotificationBody(newMessage.content),
+            conversationId: updated.id,
+          }).catch((err) => console.error('Failed to show chat notification', err));
+        } else if (notifiedMessageIds.has(newMessage.id)) {
+          console.log('[Chat] ⚠️ Notification already sent for this message:', newMessage.id);
+        }
+
+        return next;
+      });
+    };
+
+    const setupConversationsRealtime = async () => {
+      try {
+        console.log('[Chat] Starting realtime setup for userId:', userId);
+        const token = await getToken({});
+        console.log('[Chat] Token obtained:', token ? 'YES (length: ' + token.length + ')' : 'NO - THIS IS THE PROBLEM!');
+        
+        if (!token || isCancelled) {
+          console.error('[Chat] Cannot setup realtime: token missing or cancelled');
+          return;
+        }
+
+        // Ensure auth is set before creating/subscribing to channels
+        supabase.realtime.setAuth(token);
+        console.log('[Chat] Realtime auth set successfully');
+
+        // Clean up previous channel if exists
+        if (channel) {
+          console.log('[Chat] Removing previous channel');
+          supabase.removeChannel(channel);
+          channel = null;
+        }
+
+        console.log('[Chat] Creating message listener channel...');
+        channel = supabase
+          .channel(`user_conversations:${userId}:${type}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'conversations',
+              filter: `buyer_id=eq.${userId}`,
+            },
+            () => {
+              console.log('[Chat] ✅ Conversation listener triggered (buyer)', userId);
+              fetchRef.current?.();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'conversations',
+              filter: `seller_id=eq.${userId}`,
+            },
+            () => {
+              console.log('[Chat] ✅ Conversation listener triggered (seller)', userId);
+              fetchRef.current?.();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'messages',
+            },
+            (payload) => {
+              console.log('[Chat] ✅ Message INSERT received:', {
+                messageId: payload.new?.id,
+                conversationId: payload.new?.conversations_id,
+                senderId: payload.new?.sender_id,
+                content: typeof payload.new?.content,
+              });
+              applyMessageInsertToConversations(payload.new as any);
+            }
+          )
+          .on('system', { event: '*' }, (payload) => {
+            console.log('[Chat] 📡 Realtime system event:', payload);
+          })
+          .subscribe((status, err) => {
+            console.log('[Chat] 📡 Conversations realtime subscription status:', status);
+            if (err) {
+              console.error('[Chat] ❌ Realtime subscription error:', err);
+            }
+            if (status === 'CHANNEL_ERROR') {
+              console.error('[Chat] ❌ CHANNEL_ERROR: Realtime connection failed');
+            }
+            if (status === 'CLOSED') {
+              console.warn('[Chat] ⚠️ Channel CLOSED - will try to reconnect in 5s');
+              // Try to reconnect after 5 seconds
+              if (!isCancelled) {
+                setTimeout(() => {
+                  if (!isCancelled) {
+                    setupConversationsRealtime();
+                  }
+                }, 5000);
+              }
+            }
+          });
+        console.log('[Chat] ✅ Realtime channel created and subscribed');
+      } catch (err: any) {
+        console.error('[Chat] ❌ Conversations realtime setup ERROR:', err?.message || err);
+      }
+    };
+
+    setupConversationsRealtime();
+
+    return () => {
+      isCancelled = true;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, [userId, type]);
 
   return { conversations, loading, error, refresh: fetchConversations };
@@ -252,87 +433,139 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
 
   // ── Realtime: new messages ────────────────────────────────────────────────
   useEffect(() => {
-    if (!conversation?.id) return;
+    if (!conversation?.id || !userId) return;
 
-    // Clean up previous subscription
-    if (subscriptionRef.current) {
-      supabase.removeChannel(subscriptionRef.current);
-      subscriptionRef.current = null;
-    }
+    let isCancelled = false;
 
-    const channel = supabase.channel(`messages:${conversation.id}`, {
-      config: { 
-        broadcast: { self: true },
-      },
-    });
+    const setupRealtime = async () => {
+      try {
+        // Realtime must use the same auth context as table queries.
+        const token = await getToken({});
+        if (!token || isCancelled) {
+          console.error('[Chat Detail] Cannot setup realtime: token missing or cancelled');
+          return;
+        }
+        
+        // Ensure auth is set before creating/subscribing to channels
+        supabase.realtime.setAuth(token);
+        console.log('[Chat Detail] Realtime auth set successfully');
 
-    channel
-      .on<Message>(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversations_id=eq.${conversation.id}`,
-        },
-        (payload) => {
-          console.log('✅ Message INSERT received:', payload.new);
-          const newMsg = payload.new as Message;
-          
-          setMessages((prev) => {
-            const exists = prev.some(m => m.id === newMsg.id);
-            if (exists) return prev;
-            return [...prev, newMsg];
+        if (subscriptionRef.current) {
+          supabase.removeChannel(subscriptionRef.current);
+          subscriptionRef.current = null;
+        }
+
+        const channel = supabase.channel(`messages:${conversation.id}`, {
+          config: {
+            broadcast: { self: true },
+          },
+        });
+
+        channel
+          .on<Message>(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'messages',
+              filter: `conversations_id=eq.${conversation.id}`,
+            },
+            (payload) => {
+              console.log('[Chat Detail] Message INSERT received', payload.new);
+              const newMsg = payload.new as Message;
+
+              if (newMsg.sender_id !== userId && !notifiedMessageIds.has(newMsg.id)) {
+                notifiedMessageIds.add(newMsg.id);
+                const senderUser =
+                  conversation.buyer_id === newMsg.sender_id
+                    ? conversation.buyer
+                    : conversation.seller;
+                const senderName =
+                  `${senderUser?.first_name || ''} ${senderUser?.last_name || ''}`.trim() ||
+                  'New message';
+                showIncomingChatNotification({
+                  title: senderName,
+                  body: buildNotificationBody(newMsg.content),
+                  conversationId: conversation.id,
+                }).catch((err) => console.error('Failed to show chat notification', err));
+              }
+
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === newMsg.id)) return prev;
+                return [...prev, newMsg];
+              });
+            }
+          )
+          .on<Message>(
+            'postgres_changes',
+            {
+              event: 'DELETE',
+              schema: 'public',
+              table: 'messages',
+              filter: `conversations_id=eq.${conversation.id}`,
+            },
+            (payload) => {
+              console.log('[Chat Detail] Message DELETE received', payload.old);
+              setMessages((prev) =>
+                prev.filter((m) => m.id !== (payload.old as any).id)
+              );
+            }
+          )
+          .on<Message>(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'messages',
+              filter: `conversations_id=eq.${conversation.id}`,
+            },
+            (payload) => {
+              console.log('[Chat Detail] Message UPDATE received', payload.new);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === (payload.new as Message).id
+                    ? { ...m, ...(payload.new as Message) }
+                    : m
+                )
+              );
+            }
+          )
+          .on('system', { event: '*' }, (payload) => {
+            console.log('[Chat Detail] 📡 Realtime system event:', payload);
+          })
+          .subscribe((status, err) => {
+            console.log('[Chat Detail] Messages realtime subscription status:', status);
+            if (err) {
+              console.error('[Chat Detail] ❌ Realtime error:', err);
+            }
+            if (status === 'CLOSED') {
+              console.warn('[Chat Detail] ⚠️ Channel CLOSED - will try to reconnect in 5s');
+              if (!isCancelled) {
+                setTimeout(() => {
+                  if (!isCancelled) {
+                    setupRealtime();
+                  }
+                }, 5000);
+              }
+            }
           });
-        }
-      )
-      .on<Message>(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversations_id=eq.${conversation.id}`,
-        },
-        (payload) => {
-          console.log('✅ Message DELETE received:', payload.old);
-          setMessages((prev) => prev.filter((m) => m.id !== (payload.old as any).id));
-        }
-      )
-      .on<Message>(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversations_id=eq.${conversation.id}`,
-        },
-        (payload) => {
-          console.log('✅ Message UPDATE received:', payload.new);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === (payload.new as Message).id ? { ...m, ...(payload.new as Message) } : m
-            )
-          );
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Channel status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to messages');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Channel error occurred');
-        }
-      });
 
-    subscriptionRef.current = channel;
+        subscriptionRef.current = channel;
+        console.log('[Chat Detail] ✅ Messages realtime channel subscribed');
+      } catch (err: any) {
+        console.error('[Chat Detail] Realtime setup error:', err);
+      }
+    };
+
+    setupRealtime();
 
     return () => {
+      isCancelled = true;
       if (subscriptionRef.current) {
         supabase.removeChannel(subscriptionRef.current);
       }
     };
-  }, [conversation?.id]);
+  }, [conversation?.id, userId]);
 
   // ── Realtime: presence (active/online status) ─────────────────────────────
   useEffect(() => {
@@ -396,10 +629,14 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
 
       if (sendError) throw sendError;
       
-      // Replace optimistic with real message
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? (data as Message) : m))
-      );
+      // Replace optimistic message and avoid duplicates if realtime arrives first.
+      setMessages((prev) => {
+        const withoutTemp = prev.filter((m) => m.id !== tempId);
+        if (withoutTemp.some((m) => m.id === (data as Message).id)) {
+          return withoutTemp;
+        }
+        return [...withoutTemp, data as Message];
+      });
     } catch (err: any) {
       // Remove optimistic message on error
       setMessages((prev) => prev.filter((m) => m.id !== tempId));

@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
+import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -251,6 +252,7 @@ export default function ChatScreen() {
   }>();
 
   const [activeTab, setActiveTab] = useState<"regular" | "trade">("regular");
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
 
   useEffect(() => {
     if (params.tab === "trade") {
@@ -268,12 +270,12 @@ export default function ChatScreen() {
         if (autoOpen === "trade") {
           router.push({
             pathname: "/chat/trade/[id]",
-            params: { id: params.id, ...chatParams },
+            params: { id: String(params.id), ...chatParams },
           });
         } else if (autoOpen === "regular") {
           router.push({
             pathname: "/chat/normal/[id]",
-            params: { id: params.id, ...chatParams },
+            params: { id: String(params.id), ...chatParams },
           });
         }
       }, 100);
@@ -283,6 +285,21 @@ export default function ChatScreen() {
 
   const { conversations, loading, error, refresh } =
     useConversations(activeTab);
+
+  const handlePullRefresh = useCallback(async () => {
+    setIsPullRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setIsPullRefreshing(false);
+    }
+  }, [refresh]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
 
   const navigateToChat = (item: Conversation) => {
     const chatParams = {
@@ -389,7 +406,9 @@ export default function ChatScreen() {
           <ThemedText
             style={[
               styles.tabText,
-              activeTab === "trade" ? { color: "white", fontWeight: "600" } : { color: "#4B5563" },
+              activeTab === "trade"
+                ? { color: "white", fontWeight: "600" }
+                : { color: "#4B5563" },
             ]}
           >
             {t("chat.trade")}
@@ -426,8 +445,8 @@ export default function ChatScreen() {
           )}
           refreshControl={
             <RefreshControl
-              refreshing={loading}
-              onRefresh={refresh}
+              refreshing={isPullRefreshing}
+              onRefresh={handlePullRefresh}
               colors={[themeColors.tint]}
             />
           }
