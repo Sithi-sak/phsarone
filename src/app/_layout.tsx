@@ -1,14 +1,16 @@
 import ThemedStatusBar from "@/src/components/shared_components/ThemedStatusBar";
 import SellDraftProvider from "@/src/context/SellDraftContext";
-import TradeProductsProvider from "@/src/context/TradeProductsContext";
-import TradeDraftProvider from "@/src/context/TradeDraftContext";
 import { ThemeProvider } from "@/src/context/ThemeContext";
+import TradeDraftProvider from "@/src/context/TradeDraftContext";
+import TradeProductsProvider from "@/src/context/TradeProductsContext";
 import i18n from "@/src/i18n";
+import { initializeAppNotifications } from "@/src/lib/notifications";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { useFonts } from "expo-font";
+import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useState } from "react";
@@ -44,6 +46,36 @@ export default function RootLayout() {
   }, [loadSavedLanguage]);
 
   useEffect(() => {
+    initializeAppNotifications().catch((err) => {
+      console.error("Failed to initialize notifications", err);
+    });
+
+    // Listen for notification received events (foreground)
+    const receivedSubscription = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log("[App] 📬 Notification received (foreground):", {
+          title: notification.request.content.title,
+          body: notification.request.content.body,
+        });
+      },
+    );
+
+    // Listen for notification response (when user taps notification)
+    const responseSubscription =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        console.log("[App] 👆 Notification tapped:", {
+          title: response.notification.request.content.title,
+          data: response.notification.request.content.data,
+        });
+      });
+
+    return () => {
+      receivedSubscription.remove();
+      responseSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if ((loaded || error) && languageLoaded) {
       SplashScreen.hideAsync();
     }
@@ -60,7 +92,10 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StripeProvider publishableKey={stripePublishableKey} urlScheme="phsarone">
+      <StripeProvider
+        publishableKey={stripePublishableKey}
+        urlScheme="phsarone"
+      >
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
           <ThemeProvider>
             <I18nextProvider i18n={i18n}>
@@ -167,4 +202,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-

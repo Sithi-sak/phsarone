@@ -45,6 +45,7 @@
       "expo-localization",
       "expo-system-ui",
       "expo-audio",
+      "expo-notifications",
       [
         "@stripe/stripe-react-native",
         {

@@ -1,5 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
+import TradeOfferBottomSheet from "@src/components/trade_components/TradeOfferBottomSheet";
 import { Colors } from "@src/constants/Colors";
 import { useTradeProducts } from "@src/context/TradeProductsContext";
 import useThemeColor from "@src/hooks/useThemeColor";
@@ -11,7 +12,6 @@ import {
   CheckCircleIcon,
   LightbulbIcon,
 } from "phosphor-react-native";
-import TradeOfferBottomSheet from "@src/components/trade_components/TradeOfferBottomSheet";
 import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -132,9 +132,11 @@ export default function TradeProductDetailScreen() {
   const handleChatWithOwner = () => {
     if (!product?.id || !product.owner_id || isOwner) return;
 
-    router.push({
-      pathname: "/chat/trade/[id]",
+    router.replace({
+      pathname: "/(tabs)/chat",
       params: {
+        tab: "trade",
+        autoOpen: "trade",
         id: product.id,
         sellerId: product.owner_id,
         sellerName: ownerName,
@@ -482,7 +484,9 @@ export default function TradeProductDetailScreen() {
               style={[styles.btnOffer, { backgroundColor: "#E5E7EB" }]}
               onPress={handleDelete}
             >
-              <ThemedText style={styles.btnTextGrey}>{t("common.delete")}</ThemedText>
+              <ThemedText style={styles.btnTextGrey}>
+                {t("common.delete")}
+              </ThemedText>
             </TouchableOpacity>
           </>
         ) : (
@@ -754,4 +758,3 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 });
-

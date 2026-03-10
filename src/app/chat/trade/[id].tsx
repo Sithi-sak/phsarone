@@ -1056,7 +1056,6 @@ const styles = StyleSheet.create({
   },
   composerInputWrap: {
     borderRadius: 999,
-    borderWidth: 1,
     flex: 1,
     minHeight: 46,
     paddingHorizontal: 14,
