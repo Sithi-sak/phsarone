@@ -611,7 +611,7 @@ export default function AddTradeProductScreen() {
           {/* Location Card */}
           <ThemedCard>
             <ThemedText style={styles.sectionTitle}>
-              {t("trade.location")} *
+              {t("trade.location")} 
             </ThemedText>
             <LocationPickerMap
               onConfirmLocation={handleConfirmLocation}

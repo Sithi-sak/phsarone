@@ -85,7 +85,7 @@ export default function TradeProductCard({
 
         <View style={styles.lookingForContainer}>
           <ThemedText style={styles.lookingForLabel} numberOfLines={1}>
-            {t("trade_screen.looking_for")}
+            {t("trade.looking_for")}
           </ThemedText>
           <ThemedText style={styles.lookingForText} numberOfLines={2}>
             {product.lookingFor.filter(Boolean).join(", ")}

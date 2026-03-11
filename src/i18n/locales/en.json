@@ -416,7 +416,17 @@
     "photography_tip_packaging_desc": "Show original packaging and accessories if included. This increases buyer confidence.",
     "photography_tip_honesty": "Honesty first",
     "photography_tip_honesty_desc": "Clearly show any damage, wear, or defects. Honest photos build trust and reduce returns.",
-    "quality_success_message": "✓ Excellent! This image meets quality standards."
+    "quality_success_message": "✓ Excellent! This image meets quality standards.",
+    "Retrack_Current_Location": "Use current location",
+    "location_preview_title": "Location Preview",
+    "open_map": "Open Map",
+    "tap_to_open_map": "Tap to open map",
+    "gps_preview_hint": "GPS coordinates are accurate even if image preview is unavailable.",
+    "selected_location_details": "Selected Location Details",
+    "address_preview_not_available": "Address preview not available yet.",
+    "lat_short": "Lat",
+    "lng_short": "Lng",
+    "accuracy": "Accuracy"
   },
   "home_screen": {
     "recent_listings": "Recent Listings"
@@ -470,6 +480,7 @@
     "error": "Error",
     "done": "Done",
     "default": "Default",
+    "not_available": "N/A",
     "sort_by": "Sort by",
     "price": "Price",
     "condition": "Condition",
@@ -540,6 +551,9 @@
     "voice": "Voice",
     "type_your_message": "Type your message",
     "tap_to_open_map": "Tap To Open Map",
+    "retrack": "Retrack",
+    "location_services_off": "Location services are off. Please enable GPS and try again.",
+    "location_accuracy_low": "Location is too inaccurate right now. Move outdoors and try again.",
     "location": "Location",
     "tap_to_send": "Tap ✓ to send",
     "permission_photo_library": "Please allow photo library access.",
@@ -592,7 +606,7 @@
     "item_description": "Item Description",
     "item_description_placeholder": "e.g., Preferably with RTX 3060 or higher GPU",
     "add_item": "Add Item",
-    "location": "Location",
+    "location": "Pin your location",
     "contact_information": "Contact Information",
     "phone_number": "Phone Number",
     "phone_number_placeholder": "Enter your phone number",
@@ -881,4 +895,3 @@
     "verify": "Verify"
   }
 }
-

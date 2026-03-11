@@ -188,7 +188,7 @@ function Bubble({
       case "location":
         return (
           <TouchableOpacity
-            style={styles.locRow}
+            style={[styles.locRow, !isMe && styles.locReceiverCard]}
             onPress={() => {
               const u = Platform.select({
                 ios: `maps:?q=${content.label || "Location"}&ll=${content.latitude},${content.longitude}`,
@@ -349,13 +349,25 @@ export default function TradeProductChatScreen() {
   const otherUser =
     userId === conversation?.buyer_id
       ? conversation?.seller
-      : conversation?.buyer;
+      : userId === conversation?.seller_id
+        ? conversation?.buyer
+        : conversation?.buyer;
+  const fallbackName =
+    sellerId && String(sellerId) !== String(userId)
+      ? (sellerName as string)
+      : "";
+  const fallbackAvatar =
+    sellerId && String(sellerId) !== String(userId)
+      ? String(sellerAvatar || "")
+      : "";
   const chatName =
     `${otherUser?.first_name || ""} ${otherUser?.last_name || ""}`.trim() ||
-    (sellerName as string) ||
+    fallbackName ||
     "Trader";
   const chatAvatar =
-    String(otherUser?.avatar_url || "") || String(sellerAvatar || "");
+    String(otherUser?.avatar_url || "") ||
+    fallbackAvatar ||
+    "https://via.placeholder.com/150";
 
   // Last message sent by me — for seen indicator
   const myMessages = messages.filter(
@@ -617,9 +629,21 @@ export default function TradeProductChatScreen() {
             />
             {otherUserOnline ? <View style={styles.refOnlineDot} /> : null}
           </View>
-          <ThemedText numberOfLines={1} style={styles.refName}>
-            {chatName}
-          </ThemedText>
+          <View style={styles.refNameWrap}>
+            <ThemedText numberOfLines={1} style={styles.refName}>
+              {chatName}
+            </ThemedText>
+            <ThemedText
+              style={[
+                styles.refStatus,
+                {
+                  color: otherUserOnline ? "#10B981" : themeColors.text + "60",
+                },
+              ]}
+            >
+              {otherUserOnline ? t("chat.active_now") : t("chat.offline")}
+            </ThemedText>
+          </View>
         </View>
 
         <View style={styles.refActions}>
@@ -901,6 +925,14 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
   },
+  refNameWrap: {
+    flex: 1,
+  },
+  refStatus: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 1,
+  },
   refActions: {
     alignItems: "center",
     columnGap: 8,
@@ -967,6 +999,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     maxWidth: 220,
     minWidth: 150,
+  },
+  locReceiverCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.86)",
+    borderColor: "rgba(0, 0, 0, 0.08)",
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   voiceRow: {
     alignItems: "center",

@@ -85,7 +85,6 @@ export default function TradeScreen() {
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder={t("trade_screen.search_placeholder")}
             placeholderTextColor={themeColors.text + "80"}
             style={[styles.input, { color: themeColors.text }]}
             returnKeyType="search"

@@ -21,6 +21,23 @@ const buildNotificationBody = (rawContent: any): string => {
   }
 };
 
+const formatErrorMessage = (err: any): string => {
+  if (!err) return 'Unknown error';
+  if (typeof err === 'string') return err;
+
+  const parts = [err.message, err.details, err.hint, err.code]
+    .filter(Boolean)
+    .map(String);
+
+  if (parts.length > 0) return parts.join(' | ');
+
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'Unexpected error object';
+  }
+};
+
 export type Message = Database['public']['Tables']['messages']['Row'] & {
   sender?: Database['public']['Tables']['users']['Row'];
 };
@@ -29,6 +46,7 @@ export type Conversation = Database['public']['Tables']['conversations']['Row'] 
   seller?: Database['public']['Tables']['users']['Row'];
   product?: Database['public']['Tables']['products']['Row'] & { images: string[]; metadata?: any };
   trade?: Database['public']['Tables']['trades']['Row'];
+  last_message_id?: string;
   last_message_content?: any;
   last_message_at?: string;
   last_message_sender_id?: string;
@@ -56,14 +74,19 @@ export function useConversations(type: "regular" | "trade", productId?: string |
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isFetchingRef = useRef(false);
-  const fetchRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  const fetchRef = useRef<((showLoading?: boolean) => Promise<void>) | undefined>(undefined);
+  const hasInitialLoadRef = useRef(false);
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (showLoading = true) => {
     if (isFetchingRef.current) return;
-    if (!userId) { setError("User not authenticated."); setLoading(false); return; }
+    if (!userId) {
+      setError("User not authenticated.");
+      if (showLoading) setLoading(false);
+      return;
+    }
 
     isFetchingRef.current = true;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     setError(null);
 
     try {
@@ -93,7 +116,7 @@ export function useConversations(type: "regular" | "trade", productId?: string |
       const conversationIds = filteredConversations.map(c => c.id);
 
       const { data: lastMessages, error: lastError } = await authSupabase
-        .from('messages').select('conversations_id, content, created_at, sender_id')
+        .from('messages').select('id, conversations_id, content, created_at, sender_id')
         .in('conversations_id', conversationIds).order('created_at', { ascending: false });
       if (lastError) throw lastError;
 
@@ -102,21 +125,63 @@ export function useConversations(type: "regular" | "trade", productId?: string |
         .in('conversations_id', conversationIds).eq('is_read', false).neq('sender_id', userId);
       if (unreadError) throw unreadError;
 
-      setConversations(filteredConversations.map((conv: any) => {
+      const nextConversations = filteredConversations.map((conv: any) => {
         const lastMsg = (lastMessages || []).find(m => m.conversations_id === conv.id);
         return {
           ...conv,
+          last_message_id: lastMsg?.id,
           last_message_content: lastMsg?.content,
           last_message_at: lastMsg?.created_at,
           last_message_sender_id: lastMsg?.sender_id,
           unread_count: (unreadData || []).filter(m => m.conversations_id === conv.id).length,
         };
-      }));
+      });
+
+      setConversations((prev) => {
+        if (hasInitialLoadRef.current) {
+          const prevByConversationId = new Map(prev.map((c) => [c.id, c]));
+
+          nextConversations.forEach((conv: any) => {
+            try {
+              if (!conv.last_message_id) return;
+              if (conv.last_message_sender_id === userId) return;
+
+              const prevConv = prevByConversationId.get(conv.id);
+              if (prevConv?.last_message_id === conv.last_message_id) return;
+              if (notifiedMessageIds.has(conv.last_message_id)) return;
+
+              notifiedMessageIds.add(conv.last_message_id);
+
+              const senderUser =
+                (conv.buyer_id === conv.last_message_sender_id ? conv.buyer : conv.seller) ||
+                null;
+              const senderName =
+                `${senderUser?.first_name || ''} ${senderUser?.last_name || ''}`.trim() ||
+                'New message';
+
+              showIncomingChatNotification({
+                title: senderName,
+                body: buildNotificationBody(conv.last_message_content),
+                conversationId: conv.id,
+              }).catch((notifyErr) =>
+                console.error('Failed to show fallback chat notification', notifyErr)
+              );
+            } catch (notifyFlowErr) {
+              console.error('Fallback notification flow failed for conversation', conv?.id, notifyFlowErr);
+            }
+          });
+        }
+
+        hasInitialLoadRef.current = true;
+        return nextConversations;
+      });
     } catch (err: any) {
+      const message = formatErrorMessage(err);
       console.error("Error fetching conversations:", err);
-      setError(err.message || "Failed to load conversations.");
+      console.error("Error fetching conversations details:", message);
+      setError(message || "Failed to load conversations.");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
       isFetchingRef.current = false;
     }
   }, [userId, type, productId]);
@@ -158,6 +223,7 @@ export function useConversations(type: "regular" | "trade", productId?: string |
 
         const updated: Conversation = {
           ...target,
+          last_message_id: newMessage.id,
           last_message_content: newMessage.content,
           last_message_at: newMessage.created_at,
           last_message_sender_id: newMessage.sender_id,
@@ -229,7 +295,7 @@ export function useConversations(type: "regular" | "trade", productId?: string |
             },
             () => {
               console.log('[Chat] ✅ Conversation listener triggered (buyer)', userId);
-              fetchRef.current?.();
+              fetchRef.current?.(false);
             }
           )
           .on(
@@ -242,7 +308,7 @@ export function useConversations(type: "regular" | "trade", productId?: string |
             },
             () => {
               console.log('[Chat] ✅ Conversation listener triggered (seller)', userId);
-              fetchRef.current?.();
+              fetchRef.current?.(false);
             }
           )
           .on(
@@ -260,6 +326,8 @@ export function useConversations(type: "regular" | "trade", productId?: string |
                 content: typeof payload.new?.content,
               });
               applyMessageInsertToConversations(payload.new as any);
+              // Always refetch to handle cases where the conversation isn't in local state yet.
+              fetchRef.current?.(false);
             }
           )
           .on('system', { event: '*' }, (payload) => {
@@ -301,6 +369,16 @@ export function useConversations(type: "regular" | "trade", productId?: string |
     };
   }, [userId, type]);
 
+  // Fallback sync when realtime is interrupted: keep list fresh without manual pull-to-refresh.
+  useEffect(() => {
+    if (!userId) return;
+    const interval = setInterval(() => {
+      fetchRef.current?.(false);
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [userId, type, productId]);
+
   return { conversations, loading, error, refresh: fetchConversations };
 }
 
@@ -315,13 +393,18 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
   const [otherUserOnline, setOtherUserOnline] = useState(false);
   const isFetchingRef = useRef(false);
   const subscriptionRef = useRef<any>(null);
+  const fetchChatRef = useRef<((showLoading?: boolean) => Promise<void>) | undefined>(undefined);
 
-  const fetchConversationAndMessages = useCallback(async () => {
+  const fetchConversationAndMessages = useCallback(async (showLoading = true) => {
     if (isFetchingRef.current) return;
-    if (!userId) { setError("User not authenticated."); setLoading(false); return; }
+    if (!userId) {
+      setError("User not authenticated.");
+      if (showLoading) setLoading(false);
+      return;
+    }
 
     isFetchingRef.current = true;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     setError(null);
 
     try {
@@ -422,14 +505,26 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
       console.error("Error fetching chat data:", err);
       setError(err.message || "Failed to load chat data.");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
       isFetchingRef.current = false;
     }
   }, [userId, initialConversationId, productId, sellerId, tradeId]);
 
+  useEffect(() => { fetchChatRef.current = fetchConversationAndMessages; });
+
   useEffect(() => {
     fetchConversationAndMessages();
   }, [userId, initialConversationId, productId, sellerId, tradeId]);
+
+  // Fallback sync for message thread when realtime drops.
+  useEffect(() => {
+    if (!conversation?.id || !userId) return;
+    const interval = setInterval(() => {
+      fetchChatRef.current?.(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [conversation?.id, userId]);
 
   // ── Realtime: new messages ────────────────────────────────────────────────
   useEffect(() => {

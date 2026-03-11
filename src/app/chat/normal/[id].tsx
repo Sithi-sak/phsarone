@@ -72,6 +72,82 @@ function parseContent(raw: any): { type: string; [k: string]: any } {
   return typeof raw === "object" ? raw : { type: "text", text: String(raw) };
 }
 
+async function openLocationInMaps(
+  latitude: number,
+  longitude: number,
+  label?: string,
+) {
+  const encodedLabel = encodeURIComponent(label || "Location");
+  const primary = Platform.select({
+    ios: `maps:?q=${encodedLabel}&ll=${latitude},${longitude}`,
+    android: `geo:${latitude},${longitude}?q=${latitude},${longitude}(${encodedLabel})`,
+  });
+  const fallback = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
+  try {
+    if (primary && (await Linking.canOpenURL(primary))) {
+      await Linking.openURL(primary);
+      return;
+    }
+  } catch {
+    // Fall through to web URL.
+  }
+  await Linking.openURL(fallback);
+}
+
+async function getBestTrackedLocation(): Promise<Location.LocationObject> {
+  const seed = await Location.getCurrentPositionAsync({
+    accuracy:
+      Platform.OS === "android"
+        ? Location.Accuracy.Highest
+        : Location.Accuracy.High,
+  });
+
+  return await new Promise((resolve) => {
+    let best = seed;
+    let settled = false;
+    let sub: Location.LocationSubscription | null = null;
+
+    const finish = (loc: Location.LocationObject) => {
+      if (settled) return;
+      settled = true;
+      sub?.remove();
+      resolve(loc);
+    };
+
+    const timer = setTimeout(() => finish(best), 5000);
+
+    Location.watchPositionAsync(
+      {
+        accuracy:
+          Platform.OS === "android"
+            ? Location.Accuracy.Highest
+            : Location.Accuracy.High,
+        timeInterval: 1000,
+        distanceInterval: 1,
+      },
+      (update) => {
+        const bestAcc = best.coords.accuracy ?? Number.POSITIVE_INFINITY;
+        const nextAcc = update.coords.accuracy ?? Number.POSITIVE_INFINITY;
+        if (nextAcc < bestAcc) {
+          best = update;
+        }
+        if (nextAcc <= 25) {
+          clearTimeout(timer);
+          finish(best);
+        }
+      },
+    )
+      .then((watcher) => {
+        sub = watcher;
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        finish(best);
+      });
+  });
+}
+
 // ─── Voice Player ─────────────────────────────────────────────────────────────
 
 function VoicePlayer({
@@ -218,7 +294,6 @@ function Bubble({
         return (
           <Image
             source={{ uri: getOptimizedStorageImageUrl(content.url, "chat") }}
-            source={{ uri: getOptimizedStorageImageUrl(content.url, "chat") }}
             style={styles.imgMsg}
             resizeMode="cover"
           />
@@ -227,14 +302,14 @@ function Bubble({
       case "location":
         return (
           <TouchableOpacity
-            style={styles.locRow}
-            onPress={() => {
-              const u = Platform.select({
-                ios: `maps:?q=${content.label || "Location"}&ll=${content.latitude},${content.longitude}`,
-                android: `geo:${content.latitude},${content.longitude}?q=${content.label || "Location"}`,
-              });
-              if (u) Linking.openURL(u);
-            }}
+            style={[styles.locRow, !isMe && styles.locReceiverCard]}
+            onPress={() =>
+              openLocationInMaps(
+                content.latitude,
+                content.longitude,
+                content.label,
+              )
+            }
           >
             {/* ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary */}
             <MapPinIcon
@@ -419,7 +494,6 @@ function ProductCard({
         {thumbnail ? (
           <Image
             source={{ uri: optimizedThumbnail }}
-            source={{ uri: optimizedThumbnail }}
             style={styles.cardImage}
             resizeMode="cover"
           />
@@ -539,6 +613,13 @@ export default function NormalProductChatScreen() {
   const flatListRef = useRef<FlatList<Message>>(null);
   const [inputText, setInputText] = useState("");
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [pendingLocation, setPendingLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    label?: string;
+  } | null>(null);
+  const [previewMapFailed, setPreviewMapFailed] = useState(false);
+  const [isPreparingLocation, setIsPreparingLocation] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -555,7 +636,25 @@ export default function NormalProductChatScreen() {
   const otherUser =
     userId === conversation?.buyer_id
       ? conversation?.seller
-      : conversation?.buyer;
+      : userId === conversation?.seller_id
+        ? conversation?.buyer
+        : conversation?.buyer;
+  const fallbackName =
+    sellerId && String(sellerId) !== String(userId)
+      ? (sellerName as string)
+      : "";
+  const fallbackAvatar =
+    sellerId && String(sellerId) !== String(userId)
+      ? String(sellerAvatar || "")
+      : "";
+  const chatName =
+    `${otherUser?.first_name || ""} ${otherUser?.last_name || ""}`.trim() ||
+    fallbackName ||
+    "User";
+  const chatAvatar =
+    String(otherUser?.avatar_url || "") ||
+    fallbackAvatar ||
+    "https://via.placeholder.com/150";
   const myMessages = messages.filter(
     (m) => m.sender_id === userId && !m.id.startsWith("temp_"),
   );
@@ -727,7 +826,6 @@ export default function NormalProductChatScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.65,
-      quality: 0.65,
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
@@ -744,33 +842,104 @@ export default function NormalProductChatScreen() {
     }
   };
 
-  const handleSendLocation = async () => {
-    setShowAttachMenu(false);
-    const { status } = await Location.requestForegroundPermissionsAsync();
+  const captureCurrentLocationForPreview = async () => {
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    if (!servicesEnabled) {
+      Alert.alert(t("error"), t("chat.location_services_off"));
+      return null;
+    }
+
+    const existingPermission = await Location.getForegroundPermissionsAsync();
+    const { status } = existingPermission.granted
+      ? existingPermission
+      : await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(t("error"), t("chat.permission_location"));
-      return;
+      return null;
     }
-    setIsSending(true);
+
+    if (Platform.OS === "android") {
+      try {
+        await Location.enableNetworkProviderAsync();
+      } catch {
+        // User may dismiss Android high-accuracy prompt.
+      }
+    }
+
     try {
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const [geo] = await Location.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-      const label = geo
-        ? [geo.street, geo.city, geo.country].filter(Boolean).join(", ")
-        : undefined;
-      await sendMessage({
-        type: "location",
+      const loc = await getBestTrackedLocation();
+      const accuracy = loc.coords.accuracy ?? Number.POSITIVE_INFINITY;
+      if (accuracy > 400) {
+        Alert.alert(t("error"), t("chat.location_accuracy_low"));
+        return null;
+      }
+
+      let label: string | undefined;
+      try {
+        const [geo] = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+        label = geo
+          ? [geo.street, geo.city, geo.country].filter(Boolean).join(", ")
+          : undefined;
+      } catch {
+        // Reverse geocoding can fail on Android devices without geocoder service.
+        label = undefined;
+      }
+
+      return {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
         label,
-      });
+      };
     } catch (e: any) {
       Alert.alert(t("error"), e.message || t("chat.get_location_failed"));
+      return null;
+    }
+  };
+
+  const handleSendLocation = async () => {
+    setShowAttachMenu(false);
+    setIsPreparingLocation(true);
+    try {
+      const captured = await captureCurrentLocationForPreview();
+      if (captured) {
+        setPreviewMapFailed(false);
+        setPendingLocation(captured);
+      }
+    } finally {
+      setIsPreparingLocation(false);
+    }
+  };
+
+  const handleRetrackPendingLocation = async () => {
+    if (isPreparingLocation || isSending) return;
+    setIsPreparingLocation(true);
+    try {
+      const captured = await captureCurrentLocationForPreview();
+      if (captured) {
+        setPreviewMapFailed(false);
+        setPendingLocation(captured);
+      }
+    } finally {
+      setIsPreparingLocation(false);
+    }
+  };
+
+  const handleConfirmSendLocation = async () => {
+    if (!pendingLocation || isSending) return;
+    setIsSending(true);
+    try {
+      await sendMessage({
+        type: "location",
+        latitude: pendingLocation.latitude,
+        longitude: pendingLocation.longitude,
+        label: pendingLocation.label,
+      });
+      setPendingLocation(null);
+    } catch (e: any) {
+      Alert.alert(t("error"), e.message || t("chat.failed_to_send_message"));
     } finally {
       setIsSending(false);
     }
@@ -876,9 +1045,6 @@ export default function NormalProductChatScreen() {
                 source={{
                   uri: getOptimizedStorageImageUrl(content.url, "chat"),
                 }}
-                source={{
-                  uri: getOptimizedStorageImageUrl(content.url, "chat"),
-                }}
                 style={{ width: 200, height: 155, borderRadius: 13 }}
                 resizeMode="cover"
               />
@@ -888,13 +1054,13 @@ export default function NormalProductChatScreen() {
           return (
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={() => {
-                const u = Platform.select({
-                  ios: `maps:?q=${content.label || "Location"}&ll=${content.latitude},${content.longitude}`,
-                  android: `geo:${content.latitude},${content.longitude}?q=${content.label || "Location"}`,
-                });
-                if (u) Linking.openURL(u);
-              }}
+              onPress={() =>
+                openLocationInMaps(
+                  content.latitude,
+                  content.longitude,
+                  content.label,
+                )
+              }
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -906,8 +1072,10 @@ export default function NormalProductChatScreen() {
                 gap: 10,
                 backgroundColor: isMe
                   ? "rgba(255,255,255,0.15)"
-                  : themeColors.background,
-                borderColor: themeColors.border + "40",
+                  : "rgba(17, 24, 39, 0.06)",
+                borderColor: isMe
+                  ? themeColors.border + "40"
+                  : "rgba(17, 24, 39, 0.14)",
               }}
             >
               <View
@@ -934,14 +1102,18 @@ export default function NormalProductChatScreen() {
                   {content.label || t("chat.shared_location")}
                 </ThemedText>
                 <ThemedText
-                  style={{ color: "#fff", fontSize: 11, marginTop: 2 }}
+                  style={{
+                    color: isMe ? "#fff" : themeColors.text + "B3",
+                    fontSize: 11,
+                    marginTop: 2,
+                  }}
                 >
                   {Number(content.latitude).toFixed(4)},{" "}
                   {Number(content.longitude).toFixed(4)}
                 </ThemedText>
                 <ThemedText
                   style={{
-                    color: "#fff",
+                    color: isMe ? "#fff" : themeColors.text + "99",
                     fontSize: 11,
                     marginTop: 4,
                     fontWeight: "500",
@@ -1099,8 +1271,7 @@ export default function NormalProductChatScreen() {
           <View>
             <Image
               source={{
-                uri:
-                  (sellerAvatar as string) || "https://via.placeholder.com/150",
+                uri: chatAvatar,
               }}
               style={styles.headerAvatar}
             />
@@ -1108,7 +1279,7 @@ export default function NormalProductChatScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <ThemedText style={styles.headerName} numberOfLines={1}>
-              {sellerName}
+              {chatName}
             </ThemedText>
             <ThemedText
               style={{
@@ -1284,8 +1455,129 @@ export default function NormalProductChatScreen() {
           </View>
         )}
 
+        {/* ── Location preview ────────────────────────────────────────────── */}
+        {pendingLocation && !isRecording && (
+          <View
+            style={[
+              styles.locationPreviewWrap,
+              {
+                backgroundColor: themeColors.card,
+                borderTopColor: themeColors.border + "30",
+                paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+              },
+            ]}
+          >
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.locationPreviewCard}
+              onPress={() =>
+                openLocationInMaps(
+                  pendingLocation.latitude,
+                  pendingLocation.longitude,
+                  pendingLocation.label,
+                )
+              }
+            >
+              {!previewMapFailed && (
+                <Image
+                  source={{
+                    uri:
+                      `https://staticmap.openstreetmap.de/staticmap.php?center=${pendingLocation.latitude},${pendingLocation.longitude}` +
+                      `&zoom=16&size=600x220&markers=${pendingLocation.latitude},${pendingLocation.longitude},red-pushpin`,
+                  }}
+                  style={styles.locationPreviewMap}
+                  resizeMode="cover"
+                  onError={() => setPreviewMapFailed(true)}
+                />
+              )}
+              <View
+                style={[
+                  styles.locationPreviewBadge,
+                  { backgroundColor: themeColors.background + "E6" },
+                ]}
+              >
+                <ThemedText
+                  style={{
+                    color: themeColors.text,
+                    fontSize: 12,
+                    fontWeight: "600",
+                  }}
+                  numberOfLines={1}
+                >
+                  {pendingLocation.label || t("chat.shared_location")}
+                </ThemedText>
+                <ThemedText
+                  style={{ color: themeColors.text + "AA", fontSize: 11 }}
+                >
+                  {pendingLocation.latitude.toFixed(6)},{" "}
+                  {pendingLocation.longitude.toFixed(6)}
+                </ThemedText>
+              </View>
+            </TouchableOpacity>
+            <View style={styles.locationPreviewActions}>
+              <TouchableOpacity
+                onPress={() => setPendingLocation(null)}
+                disabled={isPreparingLocation || isSending}
+                style={[
+                  styles.locationPreviewBtn,
+                  {
+                    backgroundColor: themeColors.background,
+                    borderColor: themeColors.border,
+                  },
+                ]}
+              >
+                <ThemedText
+                  style={{ color: themeColors.text, fontWeight: "600" }}
+                >
+                  {t("common.cancel")}
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleRetrackPendingLocation}
+                disabled={isPreparingLocation || isSending}
+                style={[
+                  styles.locationPreviewBtn,
+                  {
+                    backgroundColor: themeColors.card,
+                    borderColor: themeColors.border,
+                  },
+                ]}
+              >
+                {isPreparingLocation ? (
+                  <ActivityIndicator size="small" color={themeColors.text} />
+                ) : (
+                  <ThemedText
+                    style={{
+                      color: themeColors.text,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {t("chat.retrack")}
+                  </ThemedText>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmSendLocation}
+                disabled={isSending || isPreparingLocation}
+                style={[
+                  styles.locationPreviewBtn,
+                  { backgroundColor: themeColors.primary },
+                ]}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <ThemedText style={{ color: "#fff", fontWeight: "700" }}>
+                    {t("chat.send") || "Send"}
+                  </ThemedText>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* ── Attach menu ─────────────────────────────────────────────────── */}
-        {showAttachMenu && !isRecording && (
+        {showAttachMenu && !isRecording && !pendingLocation && (
           <View
             style={[
               styles.attachMenu,
@@ -1520,6 +1812,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   attachLabel: { fontSize: 12, fontWeight: "500" },
+  locationPreviewWrap: {
+    borderTopWidth: 1,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    gap: 6,
+  },
+  locationPreviewCard: {
+    borderRadius: 12,
+    overflow: "hidden",
+    minHeight: 66,
+  },
+  locationPreviewMap: {
+    width: "100%",
+    height: 92,
+  },
+  locationPreviewBadge: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    bottom: 6,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  locationPreviewActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  locationPreviewBtn: {
+    flex: 1,
+    minHeight: 36,
+    borderWidth: 0.5,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -1559,6 +1887,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minWidth: 150,
     maxWidth: 220,
+  },
+  locReceiverCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.86)",
+    borderColor: "rgba(0, 0, 0, 0.08)",
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   voiceRow: {
     flexDirection: "row",

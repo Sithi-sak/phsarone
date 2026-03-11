@@ -302,11 +302,14 @@ export default function ChatScreen() {
   );
 
   const navigateToChat = (item: Conversation) => {
+    const otherParticipant =
+      userId === item.buyer_id ? item.seller : item.buyer;
+
     const chatParams = {
-      sellerId: String(item.seller_id || ""),
+      sellerId: String(otherParticipant?.id || item.seller_id || ""),
       sellerName:
-        `${item.seller?.first_name || ""} ${item.seller?.last_name || ""}`.trim(),
-      sellerAvatar: String(item.seller?.avatar_url || ""),
+        `${otherParticipant?.first_name || ""} ${otherParticipant?.last_name || ""}`.trim(),
+      sellerAvatar: String(otherParticipant?.avatar_url || ""),
       productTitle: String(item.product?.title || ""),
       productThumbnail: String(item.product?.images?.[0] || ""),
       conversationId: String(item.id || ""),

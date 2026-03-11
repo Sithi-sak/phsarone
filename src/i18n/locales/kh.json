@@ -322,6 +322,7 @@
     "What_are_you_selling?": "តើអ្នកចង់លក់អ្វី?",
     "category_subtitle": "ជ្រើសរើសប្រភេទដើម្បីបន្ត",
     "Product_Details": "ព័ត៌មានលម្អិតផលិតផល",
+    "Choose_Subcategory": "សូមជ្រើសរើសប្រភេទរងដើម្បីបន្ត",
     "Pin_Location": "ជ្រើសរើសទីតាំង",
     "Add_Photos": "បន្ថែមរូបភាព",
     "Post_Now": "ដាកលក់",
@@ -416,7 +417,17 @@
     "photography_tip_packaging_desc": "បង្ហាញប្រអប់ដើម និងគ្រឿងបន្លាស់ប្រសិនបើមាន។ វាជួយបង្កើនទំនុកចិត្តអ្នកទិញ។",
     "photography_tip_honesty": "បង្ហាញស្ថានភាពពិត",
     "photography_tip_honesty_desc": "បង្ហាញស្នាមឆ្កូត ការខូចខាត ឬបញ្ហាផ្សេងៗ។ វាជួយឲ្យអ្នកទិញទុកចិត្ត។",
-    "quality_success_message": "✓ អស្ចារ្យ! រូបភាពនេះមានគុណភាពល្អ។"
+    "quality_success_message": "✓ អស្ចារ្យ! រូបភាពនេះមានគុណភាពល្អ។",
+    "Retrack_Current_Location": "ប្រើទីតាំងបច្ចុប្បន្ន",
+    "location_preview_title": "មើលទីតាំងជាមុន",
+    "open_map": "បើកផែនទី",
+    "tap_to_open_map": "ចុចដើម្បីបើកផែនទី",
+    "gps_preview_hint": "កូអរដោនេ GPS ត្រឹមត្រូវ ទោះបីមិនអាចបង្ហាញរូបផែនទីក៏ដោយ។",
+    "selected_location_details": "ព័ត៌មានលម្អិតទីតាំងដែលបានជ្រើស",
+    "address_preview_not_available": "មិនទាន់មានការបង្ហាញអាសយដ្ឋាននៅឡើយ។",
+    "lat_short": "រយៈទទឹង",
+    "lng_short": "រយៈបណ្តោយ",
+    "accuracy": "ភាពត្រឹមត្រូវ"
   },
   "home_screen": {
     "recent_listings": "ការផ្សាយថ្មីៗ"
@@ -470,6 +481,7 @@
     "sign_in_to_bookmark": "សូមចូលគណនីដើម្បីរក្សាទុកទំនិញ។",
     "done": "រួច",
     "default": "លម្រាលដ្ឋាន",
+    "not_available": "មិនមាន",
     "sort_by": "តម្រៀបតាម",
     "price": "តម្លៃ",
     "condition": "លក្ខខណ្ឌ",
@@ -538,12 +550,16 @@
     "today": "ថ្ងៃនេះ",
     "photo": "រូបភាព",
     "location": "ទីតាំង",
+    "tap_to_open_map": "ចុចដើម្បីបើកផែនទី",
+    "retrack": "កំណត់ទីតាំងឡើងវិញ",
+    "location_services_off": "សេវាទីតាំងត្រូវបានបិទ។ សូមបើក GPS ហើយព្យាយាមម្តងទៀត។",
+    "location_accuracy_low": "ទីតាំងមិនទាន់ត្រឹមត្រូវគ្រប់គ្រាន់ទេ។ សូមទៅកន្លែងបើកចំហ ហើយព្យាយាមម្តងទៀត។",
     "tap_to_send": "ចុច ✓ ដើម្បីផ្ញើ",
     "permission_photo_library": "សូមអនុញ្ញាតឱ្យមានលទ្ធភាពលើបណ្ណាល័យរូបភាព។",
     "upload_image_failed": "មិនអាចផ្ទុករូបភាពបានទេ។",
     "permission_location": "សូមអនុញ្ញាតឱ្យមានលទ្ធភាពលើទីតាំង។",
     "get_location_failed": "បរាជ័យក្នុងការទទួលបានទីតាំង។",
-    "permission_microphone": "សូមអនុញ្ញាតឱ្យមានលទ្ធភាពលើមីក្រូផোន។",
+    "permission_microphone": "សូមអនុញ្ញាតឱ្យមានលទ្ធភាពលើមីក្រូហ្វូន",
     "start_recording_failed": "បរាជ័យក្នុងការចាប់ផ្តើមការថតសម្លេង។",
     "send_voice_failed": "មិនអាចផ្ញើសារសម្លេងបានទេ។",
     "shared_location": "ទីតាំងដែលបានចែករំលែក"
@@ -878,4 +894,3 @@
     "verify": "ផ្ទៀងផ្ទាត់"
   }
 }
-
