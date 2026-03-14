@@ -15,12 +15,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-<<<<<<< HEAD
-=======
   Alert,
   Animated,
   Image,
->>>>>>> 4146f9aaeb70a70516b6db249448ddfd36f6d030
   Linking,
   Platform,
   StyleSheet,
@@ -274,7 +271,10 @@ export default function LocationPickerMap({
   const hasAndroidMapsKey =
     Platform.OS !== "android" ||
     Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
-  const coordinateLabel = `${previewCoord.latitude.toFixed(5)}, ${previewCoord.longitude.toFixed(5)}`;
+  const staticMapUrl =
+    `https://staticmap.openstreetmap.de/staticmap.php?center=` +
+    `${previewCoord.latitude},${previewCoord.longitude}` +
+    `&zoom=15&size=800x320&markers=${previewCoord.latitude},${previewCoord.longitude},red-pushpin`;
 
   const CustomButton = ({
     title,
@@ -403,45 +403,6 @@ export default function LocationPickerMap({
             )}
           </>
         ) : (
-<<<<<<< HEAD
-          <View style={styles.mapFallback}>
-            <ThemedText style={styles.mapFallbackTitle}>
-              Location preview
-            </ThemedText>
-            <View style={styles.mapFallbackPreview}>
-              <CrosshairIcon
-                size={28}
-                color={themeColors.tint}
-                weight="bold"
-              />
-              <ThemedText style={styles.mapFallbackCoords}>
-                {coordinateLabel}
-              </ThemedText>
-              <ThemedText style={styles.mapFallbackHint}>
-                {hasSelectedLocation
-                  ? "Pinned from your current selection"
-                  : "Waiting for device GPS location"}
-              </ThemedText>
-            </View>
-            <ThemedText style={styles.mapFallbackSubtitle}>
-              Android is using the lightweight location picker in this build.
-              Refresh GPS, then open the full map if you want to verify the point.
-            </ThemedText>
-            <View style={styles.mapFallbackActions}>
-              <CustomButton
-                title={t("sellSection.Retrack_Current_Location") || "Use current location"}
-                onPress={fetchCurrentLocation}
-                disabled={isRetracking}
-                style={styles.mapFallbackButton}
-              />
-              <CustomButton
-                title={t("sellSection.Open_on_Google_Maps") || "Open in map"}
-                onPress={() => Linking.openURL(mapUrl)}
-                style={styles.mapFallbackSecondaryButton}
-                textStyle={styles.mapFallbackSecondaryButtonText}
-              />
-            </View>
-=======
           /* ── Android fallback: static map preview ── */
           <View
             style={[styles.mapFallback, { backgroundColor: themeColors.card }]}
@@ -603,7 +564,6 @@ export default function LocationPickerMap({
                 )}
               </ThemedText>
             </TouchableOpacity>
->>>>>>> 4146f9aaeb70a70516b6db249448ddfd36f6d030
           </View>
         )}
       </View>
@@ -807,72 +767,8 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       ...StyleSheet.absoluteFillObject,
       backgroundColor: "rgba(0,0,0,0.25)",
     },
-<<<<<<< HEAD
-    mapFallback: {
-      flex: 1,
-      paddingHorizontal: 14,
-      paddingVertical: 16,
-      justifyContent: "center",
-      gap: 8,
-      backgroundColor: themeColors.card,
-    },
-    mapFallbackTitle: {
-      fontSize: 14,
-      fontWeight: "600",
-      textAlign: "center",
-    },
-    mapFallbackSubtitle: {
-      fontSize: 12,
-      opacity: 0.75,
-      textAlign: "center",
-      lineHeight: 18,
-    },
-    mapFallbackButton: {
-      flex: 1,
-    },
-    mapFallbackPreview: {
-      width: "100%",
-      height: 130,
-      borderRadius: 12,
-      marginTop: 4,
-      backgroundColor: themeColors.background,
-      borderWidth: 1,
-      borderColor: themeColors.border,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      paddingHorizontal: 12,
-    },
-    mapFallbackCoords: {
-      fontSize: 15,
-      fontWeight: "700",
-      textAlign: "center",
-    },
-    mapFallbackHint: {
-      fontSize: 12,
-      opacity: 0.65,
-      textAlign: "center",
-    },
-    mapFallbackActions: {
-      flexDirection: "row",
-      gap: 10,
-      marginTop: 8,
-    },
-    mapFallbackSecondaryButton: {
-      flex: 1,
-      backgroundColor: themeColors.background,
-      borderWidth: 1,
-      borderColor: themeColors.border,
-    },
-    mapFallbackSecondaryButtonText: {
-      color: themeColors.text,
-    },
-    reTrackButton: {
-=======
-
     // ── Retrack button (on top of native map) ──
     retrackBtn: {
->>>>>>> 4146f9aaeb70a70516b6db249448ddfd36f6d030
       position: "absolute",
       right: 10,
       bottom: 10,
@@ -1149,7 +1045,3 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       fontWeight: "700",
     },
   });
-<<<<<<< HEAD
-
-=======
->>>>>>> 4146f9aaeb70a70516b6db249448ddfd36f6d030
