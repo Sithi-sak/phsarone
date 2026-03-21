@@ -4,11 +4,15 @@ import useThemeColor from "@src/hooks/useThemeColor";
 import { getAuthToken } from "@src/lib/auth";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { Href, Stack, useFocusEffect, useRouter } from "expo-router";
-import { BookmarkSimpleIcon, CaretLeftIcon } from "phosphor-react-native";
+import {
+  BookmarkSimpleIcon,
+  CaretLeftIcon,
+} from "phosphor-react-native";
 import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   StyleSheet,
@@ -17,13 +21,25 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+type BookmarkProduct = {
+  favoriteId: string;
+  id: string;
+  [key: string]: any;
+};
+
+const BOOKMARKS_AUTH_OPTIONS = {
+  timeoutMs: 45000,
+  retries: 2,
+} as const;
+
 export default function BookmarksScreen() {
   const { userId, getToken } = useAuth();
   const router = useRouter();
   const themeColors = useThemeColor();
   const { t } = useTranslation();
-  const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -37,7 +53,11 @@ export default function BookmarksScreen() {
     if (!userId) return;
     try {
       setLoading(true);
-      const token = await getAuthToken(getToken, "bookmarks fetch");
+      const token = await getAuthToken(
+        getToken,
+        "bookmarks fetch",
+        BOOKMARKS_AUTH_OPTIONS,
+      );
       const authSupabase = createClerkSupabaseClient(token);
 
       const { data, error } = await authSupabase
@@ -58,7 +78,14 @@ export default function BookmarksScreen() {
       if (error) throw error;
 
       const extractedProducts = data
-        ?.map((item: any) => item.product)
+        ?.map((item: any) =>
+          item.product
+            ? {
+                ...item.product,
+                favoriteId: item.id,
+              }
+            : null,
+        )
         .filter((p: any) => p !== null);
 
       setBookmarks(extractedProducts || []);
@@ -69,7 +96,36 @@ export default function BookmarksScreen() {
     }
   };
 
-  const renderProductItem = ({ item }: { item: any }) => {
+  const handleRemoveBookmark = async (item: BookmarkProduct) => {
+    if (!userId || removingId) return;
+
+    try {
+      setRemovingId(item.id);
+      const token = await getAuthToken(
+        getToken,
+        "bookmark remove",
+        BOOKMARKS_AUTH_OPTIONS,
+      );
+      const authSupabase = createClerkSupabaseClient(token);
+
+      const { error } = await authSupabase
+        .from("favorites")
+        .delete()
+        .eq("id", item.favoriteId)
+        .eq("user_id", userId as string);
+
+      if (error) throw error;
+
+      setBookmarks((current) => current.filter((bookmark) => bookmark.id !== item.id));
+    } catch (error) {
+      console.error("Error removing bookmark:", error);
+      Alert.alert("Error", "Failed to remove bookmark.");
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  const renderProductItem = ({ item }: { item: BookmarkProduct }) => {
     const mainImage = item.images?.[0] || "https://via.placeholder.com/150";
 
     return (
@@ -80,14 +136,32 @@ export default function BookmarksScreen() {
       >
         <Image source={{ uri: mainImage }} style={styles.listImage} />
         <View style={styles.listInfo}>
-          <View>
-            <ThemedText style={styles.listTitle} numberOfLines={2}>
-              {item.title}
-            </ThemedText>
-            <ThemedText style={styles.listMetaText}>
-              {item.location_name} •{" "}
-              {new Date(item.created_at).toLocaleDateString()}
-            </ThemedText>
+          <View style={styles.listTopRow}>
+            <View style={styles.listTextWrap}>
+              <ThemedText style={styles.listTitle} numberOfLines={2}>
+                {item.title}
+              </ThemedText>
+              <ThemedText style={styles.listMetaText}>
+                {item.location_name} •{" "}
+                {new Date(item.created_at).toLocaleDateString()}
+              </ThemedText>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleRemoveBookmark(item)}
+              hitSlop={{ bottom: 8, left: 8, right: 8, top: 8 }}
+              disabled={removingId === item.id}
+              style={styles.unbookmarkBtn}
+            >
+              {removingId === item.id ? (
+                <ActivityIndicator size="small" color={themeColors.primary} />
+              ) : (
+                <BookmarkSimpleIcon
+                  size={22}
+                  color={themeColors.primary}
+                  weight="fill"
+                />
+              )}
+            </TouchableOpacity>
           </View>
 
           <ThemedText
@@ -204,6 +278,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 4,
   },
+  listTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  listTopRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+  },
   listTitle: {
     fontSize: 16,
     fontWeight: "600",
@@ -216,6 +299,13 @@ const styles = StyleSheet.create({
   listMetaText: {
     fontSize: 13,
     opacity: 0.5,
+  },
+  unbookmarkBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 28,
+    minWidth: 28,
+    paddingTop: 2,
   },
   emptyState: {
     paddingTop: 100,

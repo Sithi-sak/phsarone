@@ -2,8 +2,10 @@ import { useAuth } from "@clerk/clerk-expo";
 import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system/legacy";
 import { useState } from "react";
+import { POST_FIELDS_MAP } from "../constants/postFields";
 import { getAuthToken } from "../lib/auth";
 import { getEntitlements } from "../lib/entitlements";
+import { moderateListingContent } from "../lib/moderation";
 import { createClerkSupabaseClient } from "../lib/supabase";
 import {
   createListingExpiryFromNow,
@@ -143,6 +145,7 @@ export function usePostProduct() {
     draft: any,
     supabase: any,
     userPlanType: string,
+    status: "active" | "draft" = "active",
   ) => {
     // 1. Map category
     const dbCategoryId = CATEGORY_UUID_MAP[draft.categoryId] || null;
@@ -153,6 +156,12 @@ export function usePostProduct() {
     );
 
     const existingMetadata = (draft.details || {}) as Record<string, any>;
+    const detailLocationText =
+      typeof existingMetadata.location === "string"
+        ? existingMetadata.location
+        : typeof existingMetadata.locationText === "string"
+          ? existingMetadata.locationText
+          : "";
     const listingExpiresAt =
       typeof existingMetadata.listing_expires_at === "string" &&
       existingMetadata.listing_expires_at.length > 0
@@ -171,6 +180,7 @@ export function usePostProduct() {
       location_name: draft.province || "Unknown",
       metadata: {
         ...existingMetadata,
+        locationText: detailLocationText,
         currency: draft.currency,
         district: draft.district,
         commune: draft.commune,
@@ -181,19 +191,46 @@ export function usePostProduct() {
         discountValue: draft.discountValue,
         listing_expires_at: listingExpiresAt,
       },
-      status: "active",
+      status,
     };
+  };
+
+  const assertListingAllowed = (draft: any) => {
+    const moderation = moderateListingContent({
+      title: draft.title,
+      description: draft.description,
+      subCategory: draft.subCategory,
+      metadata: draft.details,
+    });
+
+    if (moderation.outcome === "block") {
+      throw new Error(
+        `This listing contains prohibited content (${moderation.matches.join(", ")}). Weapons, explosives, drugs, and explicit adult listings are not allowed.`,
+      );
+    }
+
+    if (moderation.outcome === "review") {
+      throw new Error(
+        `This listing contains restricted content (${moderation.matches.join(", ")}). Please remove unsafe terms before posting.`,
+      );
+    }
   };
 
   const postProduct = async (draft: any) => {
     if (!userId) throw new Error("User ID is missing. Please sign in again.");
     setIsPosting(true);
     try {
+      assertListingAllowed(draft);
       const token = await getAuthToken(getToken, "product publish");
       const supabase = createClerkSupabaseClient(token);
       const userPlanType = await fetchUserPlanType(supabase);
       await assertActiveListingCapacity(supabase, userPlanType);
-      const productData = await prepareProductData(draft, supabase, userPlanType);
+      const productData = await prepareProductData(
+        draft,
+        supabase,
+        userPlanType,
+        "active",
+      );
 
       const { data, error } = await supabase
         .from("products")
@@ -214,11 +251,17 @@ export function usePostProduct() {
     if (!userId) throw new Error("User ID is missing. Please sign in again.");
     setIsPosting(true);
     try {
+      assertListingAllowed(draft);
       const token = await getAuthToken(getToken, "product update");
       const supabase = createClerkSupabaseClient(token);
       const userPlanType = await fetchUserPlanType(supabase);
       await assertActiveListingCapacity(supabase, userPlanType, id);
-      const productData = await prepareProductData(draft, supabase, userPlanType);
+      const productData = await prepareProductData(
+        draft,
+        supabase,
+        userPlanType,
+        "active",
+      );
 
       const { data, error } = await supabase
         .from("products")
@@ -236,9 +279,42 @@ export function usePostProduct() {
     }
   };
 
+  const saveDraft = async (draft: any, id?: string) => {
+    if (!userId) throw new Error("User ID is missing. Please sign in again.");
+    setIsPosting(true);
+    try {
+      assertListingAllowed(draft);
+      const token = await getAuthToken(getToken, "product draft save");
+      const supabase = createClerkSupabaseClient(token);
+      const userPlanType = await fetchUserPlanType(supabase);
+      const productData = await prepareProductData(
+        draft,
+        supabase,
+        userPlanType,
+        "draft",
+      );
+
+      const query = id
+        ? supabase.from("products").update(productData).eq("id", id)
+        : supabase.from("products").insert(productData);
+
+      const { data, error } = await query.select().single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      throw normalizeProductWriteError(error);
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
   const fetchProductForEdit = async (id: string) => {
     try {
-      const token = await getAuthToken(getToken, "product edit fetch");
+      const token = await getAuthToken(getToken, "product edit fetch", {
+        timeoutMs: 45000,
+        retries: 2,
+      });
       const supabase = createClerkSupabaseClient(token);
       const { data, error } = await supabase
         .from("products")
@@ -250,13 +326,25 @@ export function usePostProduct() {
       if (!data) throw new Error("Product not found.");
 
       const metadata = (data.metadata as Record<string, any> | null) ?? {};
+      const subCategory = metadata.subCategory || "";
+      const detailFields =
+        (subCategory && POST_FIELDS_MAP[subCategory]) || [];
+      const detailKeys = new Set(detailFields.map((field) => field.key));
+      const details = Object.fromEntries(
+        Array.from(detailKeys).map((key) => {
+          if (key === "location") {
+            return [key, metadata.locationText || ""];
+          }
+          return [key, metadata[key] ?? ""];
+        }),
+      );
 
       // Map DB data back to Draft structure
       return {
         categoryId: data.category_id
           ? UUID_TO_CATEGORY_ID[data.category_id] || ""
           : "",
-        subCategory: metadata.subCategory || "",
+        subCategory,
         photos: data.images || [],
         title: data.title || "",
         price: data.price?.toString() || "",
@@ -265,11 +353,12 @@ export function usePostProduct() {
         discountValue: metadata.discountValue || "",
         negotiable: data.is_negotiable || false,
         description: data.description || "",
-        details: metadata,
+        details,
         province: data.location_name || "",
         location: metadata.location || { latitude: 11.5564, longitude: 104.9282 },
         district: metadata.district || "",
         commune: metadata.commune || "",
+        _status: data.status || "active",
         contact: {
           chatOnly: true,
           sellerName: "",
@@ -283,5 +372,11 @@ export function usePostProduct() {
     }
   };
 
-  return { postProduct, updateProduct, fetchProductForEdit, isPosting };
+  return {
+    postProduct,
+    saveDraft,
+    updateProduct,
+    fetchProductForEdit,
+    isPosting,
+  };
 }

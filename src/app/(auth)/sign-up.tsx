@@ -136,7 +136,7 @@ export default function SignUpScreen() {
 
       if (signUpAttempt.status === "complete") {
         await setActive({ session: signUpAttempt.createdSessionId });
-        router.replace("/(tabs)");
+        router.replace("/");
       } else {
         const errorMsg = "Invalid or expired verification code";
         setError(errorMsg);
@@ -365,8 +365,7 @@ const styles = StyleSheet.create({
     color: "#E44336",
   },
   codeInput: {
-    fontSize: 24,
-    letterSpacing: 8,
+    fontSize: 20,
     fontWeight: "600",
     textAlign: "center",
   },

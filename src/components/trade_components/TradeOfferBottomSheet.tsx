@@ -117,6 +117,59 @@ export default function TradeOfferBottomSheet({
       const productThumbnail = targetTrade?.images?.[0] || "";
       const productPrice = String(targetTrade?.originalPrice ?? "");
 
+      const { data: existingConversation, error: findConversationError } =
+        await authSupabase
+          .from("conversations")
+          .select("id")
+          .eq("trade_id", targetTradeId)
+          .eq("seller_id", targetOwnerId)
+          .eq("buyer_id", userId)
+          .maybeSingle();
+
+      if (findConversationError) throw findConversationError;
+
+      let conversationId = existingConversation?.id;
+
+      if (!conversationId) {
+        const { data: newConversation, error: createConversationError } =
+          await authSupabase
+            .from("conversations")
+            .insert({
+              trade_id: targetTradeId,
+              seller_id: targetOwnerId,
+              buyer_id: userId,
+            })
+            .select("id")
+            .single();
+
+        if (createConversationError) throw createConversationError;
+        conversationId = newConversation.id;
+      }
+
+      if (!conversationId) {
+        throw new Error("Failed to create trade conversation.");
+      }
+
+      const { error: messageError } = await authSupabase.from("messages").insert({
+        conversations_id: conversationId,
+        sender_id: userId,
+        content: {
+          type: "trade_offer",
+          offeredItemId: selectedItemId,
+          offeredItemTitle: selectedItem?.title || "Trade Item",
+          offeredItemImage: selectedItem?.images?.[0] || "",
+          offeredItemPrice:
+            selectedItem?.originalPrice != null
+              ? `$${selectedItem.originalPrice}`
+              : undefined,
+          targetTradeId,
+          targetTradeTitle: targetTrade?.title || "",
+          message: `Trade offer sent: ${selectedItem?.title || "Trade Item"}`,
+        },
+      });
+
+      if (messageError) throw messageError;
+
       // CRITICAL: Close this bottom sheet modal first
       handleClose(() => {
         // Dismiss all current modals (like the Trade Detail screen)
@@ -136,6 +189,7 @@ export default function TradeOfferBottomSheet({
             productThumbnail,
             productPrice,
             productCurrency: "USD",
+            conversationId,
           }
         });
         

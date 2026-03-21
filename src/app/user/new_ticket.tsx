@@ -1,11 +1,17 @@
+import { useAuth } from "@clerk/clerk-expo";
+import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { ThemedTextInput } from "@src/components/shared_components/ThemedTextInput";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { getAuthToken } from "@src/lib/auth";
+import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { Stack, useRouter } from "expo-router";
 import { CaretLeftIcon, PlusCircleIcon } from "phosphor-react-native";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,8 +25,64 @@ export default function NewTicketScreen() {
   const router = useRouter();
   const themeColors = useThemeColor();
   const { t } = useTranslation();
+  const { userId, getToken } = useAuth();
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const handleSend = async () => {
+    if (!userId) {
+      Alert.alert(
+        t("support_screen.sign_in_required"),
+        t("support_screen.sign_in_required_desc"),
+      );
+      return;
+    }
+
+    if (!subject.trim()) {
+      Alert.alert(
+        t("support_screen.subject_required"),
+        t("support_screen.subject_required_desc"),
+      );
+      return;
+    }
+
+    if (!description.trim()) {
+      Alert.alert(
+        t("support_screen.description_required"),
+        t("support_screen.description_required_desc"),
+      );
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const token = await getAuthToken(getToken, "support ticket create", {
+        timeoutMs: 45000,
+        retries: 2,
+      });
+      const authSupabase = createClerkSupabaseClient(token);
+      const { error } = await authSupabase.from("support_tickets").insert({
+        user_id: userId,
+        subject: subject.trim(),
+        description: description.trim(),
+        status: "open",
+      });
+
+      if (error) throw error;
+
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      console.warn("Support ticket create warning:", err);
+      Alert.alert(
+        t("support_screen.error_send_title"),
+        err?.message || t("support_screen.error_try_again"),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView
@@ -94,6 +156,12 @@ export default function NewTicketScreen() {
                 borderStyle: "dashed",
               },
             ]}
+            onPress={() =>
+              Alert.alert(
+                t("support_screen.attachments_coming_soon"),
+                t("support_screen.attachments_coming_soon_desc"),
+              )
+            }
           >
             <PlusCircleIcon
               size={24}
@@ -106,20 +174,48 @@ export default function NewTicketScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.sendBtn, { backgroundColor: themeColors.primary }]}
-            onPress={() => {}}
+            style={[
+              styles.sendBtn,
+              {
+                backgroundColor: submitting
+                  ? themeColors.primary + "99"
+                  : themeColors.primary,
+              },
+            ]}
+            onPress={handleSend}
+            disabled={submitting}
           >
-            <ThemedText
-              style={[
-                styles.sendBtnText,
-                { color: themeColors.primaryButtonText },
-              ]}
-            >
-              {t("support_screen.send")}
-            </ThemedText>
+            {submitting ? (
+              <ActivityIndicator
+                size="small"
+                color={themeColors.primaryButtonText}
+              />
+            ) : (
+              <ThemedText
+                style={[
+                  styles.sendBtnText,
+                  { color: themeColors.primaryButtonText },
+                ]}
+              >
+                {t("support_screen.send")}
+              </ThemedText>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ActionStatusModal
+        visible={showSuccessModal}
+        tone="success"
+        hideHeaderTone
+        title={t("support_screen.ticket_created")}
+        description={t("support_screen.ticket_created_desc")}
+        actionLabel={t("common.continue")}
+        onClose={() => {
+          setShowSuccessModal(false);
+          router.replace("/user/support");
+        }}
+      />
     </SafeAreaView>
   );
 }

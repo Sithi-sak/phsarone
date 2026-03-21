@@ -1,10 +1,12 @@
+import AnalyticsLockedCard from "@src/components/dashboard_components/AnalyticsLockedCard";
 import DashboardHeader from "@src/components/dashboard_components/DashboardHeader";
 import InterestsDonutChart from "@src/components/dashboard_components/InterestsDonutChart";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
+import { useCurrentSubscription } from "@src/hooks/useCurrentSubscription";
 import { useDashboardAnalytics } from "@src/hooks/useDashboardAnalytics";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { Stack } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -15,7 +17,17 @@ function pct(part: number, total: number): number {
 
 export default function DashboardInsightScreen() {
   const themeColors = useThemeColor();
-  const { data, error, loading } = useDashboardAnalytics();
+  const {
+    entitlements,
+    loading: subscriptionLoading,
+    refresh: refreshSubscription,
+  } = useCurrentSubscription();
+  const canAccess = entitlements.hasAdvancedAnalytics;
+  const { data, error, loading } = useDashboardAnalytics(canAccess);
+
+  useEffect(() => {
+    refreshSubscription();
+  }, [refreshSubscription]);
 
   const funnelSteps = useMemo(
     () => [
@@ -98,140 +110,152 @@ export default function DashboardInsightScreen() {
 
       <DashboardHeader title="Insights" />
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headingBlock}>
-          <ThemedText style={styles.headingTitle}>Marketplace Insights</ThemedText>
-          <ThemedText style={styles.headingSubtitle}>
-            Why buyers engage this way and what to improve next.
-          </ThemedText>
+      {subscriptionLoading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="small" color={themeColors.primary} />
         </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <ThemedText style={styles.errorText}>{error}</ThemedText>
+      ) : !canAccess ? (
+        <AnalyticsLockedCard
+          title="Advanced insights unavailable"
+          description="The Insights dashboard is reserved for Business plans with advanced analytics."
+          requiredPlan="business"
+        />
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.headingBlock}>
+            <ThemedText style={styles.headingTitle}>Marketplace Insights</ThemedText>
+            <ThemedText style={styles.headingSubtitle}>
+              Why buyers engage this way and what to improve next.
+            </ThemedText>
           </View>
-        ) : null}
 
-        <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
-          <ThemedText style={styles.sectionTitle}>Conversion Clues</ThemedText>
-          <ThemedText style={styles.sectionSubtitle}>
-            Interpretation of behavior flow, not raw totals.
-          </ThemedText>
+          {error ? (
+            <View style={styles.errorCard}>
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
+            </View>
+          ) : null}
 
-          <View style={styles.clueList}>
-            {conversionClues.map((clue) => (
-              <View
-                key={clue.key}
-                style={[styles.clueItem, { backgroundColor: themeColors.background }]}
-              >
-                <View>
-                  <ThemedText style={styles.clueLabel}>{clue.label}</ThemedText>
-                  <ThemedText style={styles.clueNote}>{clue.note}</ThemedText>
+          <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
+            <ThemedText style={styles.sectionTitle}>Conversion Clues</ThemedText>
+            <ThemedText style={styles.sectionSubtitle}>
+              Interpretation of behavior flow, not raw totals.
+            </ThemedText>
+
+            <View style={styles.clueList}>
+              {conversionClues.map((clue) => (
+                <View
+                  key={clue.key}
+                  style={[styles.clueItem, { backgroundColor: themeColors.background }]}
+                >
+                  <View>
+                    <ThemedText style={styles.clueLabel}>{clue.label}</ThemedText>
+                    <ThemedText style={styles.clueNote}>{clue.note}</ThemedText>
+                  </View>
+                  <ThemedText style={styles.clueValue}>{clue.value}</ThemedText>
                 </View>
-                <ThemedText style={styles.clueValue}>{clue.value}</ThemedText>
-              </View>
-            ))}
+              ))}
+            </View>
           </View>
-        </View>
 
-        <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
-          <ThemedText style={styles.sectionTitle}>Engagement Funnel</ThemedText>
-          <ThemedText style={styles.sectionSubtitle}>Views to Saves to Chats</ThemedText>
+          <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
+            <ThemedText style={styles.sectionTitle}>Engagement Funnel</ThemedText>
+            <ThemedText style={styles.sectionSubtitle}>Views to Saves to Chats</ThemedText>
 
-          <View style={styles.funnelWrap}>
-            {funnelSteps.map((step) => {
-              const ratio = step.value > 0 ? Math.round((step.value / funnelBase) * 100) : 0;
-              const fillWidth = ratio > 0 ? Math.max(ratio, 8) : 0;
+            <View style={styles.funnelWrap}>
+              {funnelSteps.map((step) => {
+                const ratio = step.value > 0 ? Math.round((step.value / funnelBase) * 100) : 0;
+                const fillWidth = ratio > 0 ? Math.max(ratio, 8) : 0;
 
-              return (
-                <View key={step.label} style={styles.funnelRow}>
-                  <View style={styles.funnelRowTop}>
-                    <ThemedText style={styles.funnelLabel}>{step.label}</ThemedText>
-                    <ThemedText style={styles.funnelValue}>{step.value}</ThemedText>
+                return (
+                  <View key={step.label} style={styles.funnelRow}>
+                    <View style={styles.funnelRowTop}>
+                      <ThemedText style={styles.funnelLabel}>{step.label}</ThemedText>
+                      <ThemedText style={styles.funnelValue}>{step.value}</ThemedText>
+                    </View>
+                    <View
+                      style={[
+                        styles.funnelTrack,
+                        { backgroundColor: themeColors.background },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.funnelFill,
+                          {
+                            backgroundColor: step.color,
+                            width: `${fillWidth}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
+            <ThemedText style={styles.sectionTitle}>Demand Mix</ThemedText>
+            <ThemedText style={styles.sectionSubtitle}>
+              Category interest from views, saves, and chats (90 days).
+            </ThemedText>
+
+            {loading ? (
+              <View style={styles.loadingWrap}>
+                <ActivityIndicator size="small" color={themeColors.primary} />
+              </View>
+            ) : (
+              <InterestsDonutChart segments={data.insights.segments} />
+            )}
+          </View>
+
+          <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
+            <ThemedText style={styles.sectionTitle}>Top Demand Categories</ThemedText>
+            <View style={styles.rankList}>
+              {topSegments.map((segment) => (
+                <View key={segment.label} style={styles.rankItem}>
+                  <View style={styles.rankRowTop}>
+                    <ThemedText style={styles.rankLabel}>{segment.label}</ThemedText>
+                    <ThemedText style={styles.rankValue}>{segment.value}%</ThemedText>
                   </View>
                   <View
                     style={[
-                      styles.funnelTrack,
+                      styles.rankTrack,
                       { backgroundColor: themeColors.background },
                     ]}
                   >
                     <View
                       style={[
-                        styles.funnelFill,
+                        styles.rankFill,
                         {
-                          backgroundColor: step.color,
-                          width: `${fillWidth}%`,
+                          backgroundColor: segment.color,
+                          width: `${Math.max(6, segment.value)}%`,
                         },
                       ]}
                     />
                   </View>
                 </View>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
-          <ThemedText style={styles.sectionTitle}>Demand Mix</ThemedText>
-          <ThemedText style={styles.sectionSubtitle}>
-            Category interest from views, saves, and chats (90 days).
-          </ThemedText>
-
-          {loading ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator size="small" color={themeColors.primary} />
+              ))}
             </View>
-          ) : (
-            <InterestsDonutChart segments={data.insights.segments} />
-          )}
-        </View>
-
-        <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
-          <ThemedText style={styles.sectionTitle}>Top Demand Categories</ThemedText>
-          <View style={styles.rankList}>
-            {topSegments.map((segment) => (
-              <View key={segment.label} style={styles.rankItem}>
-                <View style={styles.rankRowTop}>
-                  <ThemedText style={styles.rankLabel}>{segment.label}</ThemedText>
-                  <ThemedText style={styles.rankValue}>{segment.value}%</ThemedText>
-                </View>
-                <View
-                  style={[
-                    styles.rankTrack,
-                    { backgroundColor: themeColors.background },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.rankFill,
-                      {
-                        backgroundColor: segment.color,
-                        width: `${Math.max(6, segment.value)}%`,
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-            ))}
           </View>
-        </View>
 
-        <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
-          <ThemedText style={styles.sectionTitle}>Actionable Tips</ThemedText>
-          <View style={styles.tipList}>
-            {tips.map((tip) => (
-              <View key={tip} style={styles.tipRow}>
-                <View style={styles.tipDot} />
-                <ThemedText style={styles.tipText}>{tip}</ThemedText>
-              </View>
-            ))}
+          <View style={[styles.sectionCard, { backgroundColor: themeColors.card }]}>
+            <ThemedText style={styles.sectionTitle}>Actionable Tips</ThemedText>
+            <View style={styles.tipList}>
+              {tips.map((tip) => (
+                <View key={tip} style={styles.tipRow}>
+                  <View style={styles.tipDot} />
+                  <ThemedText style={styles.tipText}>{tip}</ThemedText>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

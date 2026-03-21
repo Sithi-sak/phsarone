@@ -79,6 +79,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
       options: ["Manual", "Automatic"],
     },
     { key: "color", label: "Color" },
+    {
+      key: "condition",
+      label: "Condition",
+      type: "select",
+      options: ["New", "Like New", "Used"],
+    },
   ],
   Bicycle: [
     { key: "type", label: "Type", required: true },
@@ -104,6 +110,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     { key: "mileage", label: "Mileage (km)", type: "number" },
     { key: "engineSize", label: "Engine Size (cc)", type: "number" },
     { key: "color", label: "Color" },
+    {
+      key: "condition",
+      label: "Condition",
+      type: "select",
+      options: ["New", "Like New", "Used"],
+    },
   ],
   Lorries: [
     { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Lorries },
@@ -117,6 +129,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
       type: "select",
       options: ["Petrol", "Diesel"],
     },
+    {
+      key: "condition",
+      label: "Condition",
+      type: "select",
+      options: ["New", "Like New", "Used"],
+    },
   ],
   Tractors: [
     { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS.Tractors },
@@ -124,6 +142,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     { key: "year", label: "Year", type: "number" },
     { key: "horsepower", label: "Horsepower", type: "number" },
     { key: "hours", label: "Engine Hours", type: "number" },
+    {
+      key: "condition",
+      label: "Condition",
+      type: "select",
+      options: ["New", "Like New", "Used"],
+    },
   ],
   "Tuk Tuk & Remork": [
     { key: "brand", label: "Brand", required: true, type: "select", options: POPULAR_BRANDS["Tuk Tuk & Remork"] },
@@ -131,6 +155,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     { key: "year", label: "Year", type: "number" },
     { key: "mileage", label: "Mileage (km)", type: "number" },
     { key: "seats", label: "Number of Seats", type: "number" },
+    {
+      key: "condition",
+      label: "Condition",
+      type: "select",
+      options: ["New", "Like New", "Used"],
+    },
   ],
   "Parts & Accessories": [
     { key: "partType", label: "Part Type", required: true },
@@ -155,6 +185,12 @@ export const POST_FIELDS_MAP: Record<string, any[]> = {
     { key: "year", label: "Year", type: "number" },
     { key: "dailyRate", label: "Daily Rate ($)", type: "number" },
     { key: "monthlyRate", label: "Monthly Rate ($)", type: "number" },
+    {
+      key: "condition",
+      label: "Condition",
+      type: "select",
+      options: ["New", "Like New", "Used"],
+    },
   ],
 
   // Category 3: Health & Beauty

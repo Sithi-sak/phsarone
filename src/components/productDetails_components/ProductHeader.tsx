@@ -5,15 +5,17 @@ import React from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 
 interface ProductHeaderProps {
-  onShare: () => void;
   onFavorite: () => void;
   isFavorite: boolean;
+  onMorePress?: () => void;
+  showMoreButton?: boolean;
 }
 
 const ProductHeader: React.FC<ProductHeaderProps> = ({
-  onShare,
   onFavorite,
   isFavorite,
+  onMorePress,
+  showMoreButton = false,
 }) => {
   const router = useRouter();
   const themeColors = useThemeColor();
@@ -31,12 +33,18 @@ const ProductHeader: React.FC<ProductHeaderProps> = ({
         />
       </TouchableOpacity>
       <View style={styles.headerActions}>
-        <TouchableOpacity onPress={onShare} style={styles.headerButton}>
-          <Ionicons name="share-outline" size={24} color={themeColors.text} />
-        </TouchableOpacity>
+        {showMoreButton ? (
+          <TouchableOpacity onPress={onMorePress} style={styles.headerButton}>
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={22}
+              color={themeColors.text}
+            />
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity onPress={onFavorite} style={styles.headerButton}>
           <Ionicons
-            name={isFavorite ? "heart" : "heart-outline"}
+            name={isFavorite ? "bookmark" : "bookmark-outline"}
             size={24}
             color={isFavorite ? themeColors.tint : themeColors.text}
           />

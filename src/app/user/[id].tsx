@@ -1,9 +1,12 @@
 import { useAuth } from "@clerk/clerk-expo";
 import ProductCard from "@src/components/category_components/ProductCard";
+import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { Colors } from "@src/constants/Colors";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { getAuthToken } from "@src/lib/auth";
+import { fetchBlockedUserIds } from "@src/lib/blockedUsers";
+import { getEntitlements } from "@src/lib/entitlements";
 import { createClerkSupabaseClient, supabase } from "@src/lib/supabase";
 import {
   Href,
@@ -14,6 +17,7 @@ import {
 } from "expo-router";
 import {
   CaretLeftIcon,
+  CheckCircleIcon,
   DotsThreeIcon,
   PencilSimpleIcon,
   RowsIcon,
@@ -29,6 +33,9 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Modal,
+  Pressable,
+  Share,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -50,6 +57,13 @@ export default function PublicProfileScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
+  const [selectedReportReason, setSelectedReportReason] = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportSuccessVisible, setReportSuccessVisible] = useState(false);
+  const [isBlockedUser, setIsBlockedUser] = useState(false);
+  const [updatingBlockState, setUpdatingBlockState] = useState(false);
 
   // Follow State
   const [isFollowing, setIsFollowing] = useState(false);
@@ -57,16 +71,54 @@ export default function PublicProfileScreen() {
   const [followingCount, setFollowingCount] = useState(0);
   const [togglingFollow, setTogglingFollow] = useState(false);
 
+  const accountType = String(userData?.user_type || "regular").toLowerCase();
+  const accountEntitlements = getEntitlements({
+    fallbackUserType: accountType,
+  });
+  const hasEnhancedProfile = accountEntitlements.hasSellerProfileEnhancement;
+  const accountTypeLabel =
+    accountType === "starter"
+      ? `${t("subscription_screen.starter")} Plan`
+      : accountType === "pro"
+        ? `${t("subscription_screen.pro")} Plan`
+        : accountType === "business"
+          ? `${t("subscription_screen.business")} Plan`
+          : t("user_actions.regular_account");
+
+  const reportReasons = [
+    "Scam or fraudulent activity",
+    "Prohibited or unsafe items",
+    "Harassment or abusive behavior",
+    "Fake profile or impersonation",
+    "Spam or misleading listings",
+  ];
+
   useFocusEffect(
     useCallback(() => {
-      fetchProfileData();
-      checkFollowStatus();
-      fetchFollowCounts();
-    }, [id]),
+      let isActive = true;
+
+      const loadScreen = async () => {
+        const blocked = await fetchProfileData();
+        if (!isActive) return;
+        await fetchFollowCounts();
+        if (blocked) {
+          setIsFollowing(false);
+          return;
+        }
+        await checkFollowStatus();
+      };
+
+      loadScreen();
+
+      return () => {
+        isActive = false;
+      };
+    }, [id, currentUserId]),
   );
 
   const fetchProfileData = async () => {
     try {
+      setLoading(true);
       const { data: user, error: userError } = await supabase
         .from("users")
         .select("*")
@@ -75,6 +127,22 @@ export default function PublicProfileScreen() {
 
       if (userError) throw userError;
       setUserData(user);
+
+      let blocked = false;
+      if (currentUserId && !isOwnProfile) {
+        const blockedIds = await fetchBlockedUserIds(
+          getToken,
+          "blocked sellers public profile",
+        );
+        blocked = blockedIds.includes(id);
+      }
+
+      setIsBlockedUser(blocked);
+
+      if (blocked) {
+        setProducts([]);
+        return true;
+      }
 
       const { data: userProducts, error: prodError } = await supabase
         .from("products")
@@ -86,14 +154,19 @@ export default function PublicProfileScreen() {
       if (prodError) throw prodError;
       setProducts(userProducts || []);
     } catch (error) {
-      console.error("Error fetching public profile:", error);
+      console.warn("Public profile fetch warning:", error);
     } finally {
       setLoading(false);
     }
+
+    return false;
   };
 
   const checkFollowStatus = async () => {
-    if (!currentUserId || isOwnProfile) return;
+    if (!currentUserId || isOwnProfile || isBlockedUser) {
+      setIsFollowing(false);
+      return;
+    }
     try {
       const { data } = await supabase
         .from("follows")
@@ -123,7 +196,7 @@ export default function PublicProfileScreen() {
       setFollowerCount(followers || 0);
       setFollowingCount(following || 0);
     } catch (error) {
-      console.error("Error fetching follow counts:", error);
+      console.warn("Follow counts fetch warning:", error);
     }
   };
 
@@ -132,6 +205,7 @@ export default function PublicProfileScreen() {
       Alert.alert("Sign In", "Please sign in to follow users.");
       return;
     }
+    if (isBlockedUser) return;
     if (togglingFollow) return;
 
     try {
@@ -157,10 +231,118 @@ export default function PublicProfileScreen() {
         setFollowerCount((prev) => prev + 1);
       }
     } catch (error) {
-      console.error("Error toggling follow:", error);
+      console.warn("Follow toggle warning:", error);
       Alert.alert("Error", "Something went wrong. Please try again.");
     } finally {
       setTogglingFollow(false);
+    }
+  };
+
+  const handleShareProfile = async () => {
+    try {
+      const profileName = `${userData?.first_name || ""} ${userData?.last_name || ""}`.trim() || "seller";
+      await Share.share({
+        message: `Check out ${profileName}'s profile on PhsarOne.`,
+      });
+    } catch (error) {
+      console.warn("Profile share warning:", error);
+    } finally {
+      setShowProfileMenu(false);
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!currentUserId || !id || isOwnProfile) return;
+
+    try {
+      setUpdatingBlockState(true);
+      const token = await getAuthToken(getToken, "profile block user");
+      const authSupabase = createClerkSupabaseClient(token);
+      const { error } = await authSupabase.from("blocked_users").upsert({
+        blocker_id: currentUserId,
+        blocked_id: id,
+      });
+      if (error) throw error;
+
+      await authSupabase
+        .from("follows")
+        .delete()
+        .eq("follower_id", currentUserId)
+        .eq("following_id", id);
+
+      if (isFollowing) {
+        setFollowerCount((prev) => Math.max(0, prev - 1));
+      }
+      setIsFollowing(false);
+      setIsBlockedUser(true);
+      setProducts([]);
+      setShowProfileMenu(false);
+    } catch (error) {
+      console.warn("Block user warning:", error);
+      Alert.alert("Error", "Could not block this user.");
+    } finally {
+      setUpdatingBlockState(false);
+    }
+  };
+
+  const handleUnblockUser = async () => {
+    if (!currentUserId || !id || isOwnProfile) return;
+
+    try {
+      setUpdatingBlockState(true);
+      const token = await getAuthToken(getToken, "profile unblock user");
+      const authSupabase = createClerkSupabaseClient(token);
+      const { error } = await authSupabase
+        .from("blocked_users")
+        .delete()
+        .eq("blocker_id", currentUserId)
+        .eq("blocked_id", id);
+
+      if (error) throw error;
+
+      setShowProfileMenu(false);
+      setIsBlockedUser(false);
+      await fetchProfileData();
+    } catch (error) {
+      console.warn("Unblock user warning:", error);
+      Alert.alert("Error", "Could not unblock this user.");
+    } finally {
+      setUpdatingBlockState(false);
+    }
+  };
+
+  const handleReportSeller = () => {
+    setShowProfileMenu(false);
+    setSelectedReportReason("");
+    setShowReportSheet(true);
+  };
+
+  const handleSubmitReport = async () => {
+    if (!currentUserId || !id || !selectedReportReason) return;
+
+    try {
+      setSubmittingReport(true);
+      const token = await getAuthToken(getToken, "profile report seller", {
+        timeoutMs: 45000,
+        retries: 2,
+      });
+      const authSupabase = createClerkSupabaseClient(token);
+      const { error } = await authSupabase.from("reports").insert({
+        reporter_id: currentUserId,
+        target_user_id: id,
+        reason: selectedReportReason,
+        status: "pending",
+      });
+
+      if (error) throw error;
+
+      setShowReportSheet(false);
+      setReportSuccessVisible(true);
+    } catch (error) {
+      console.warn("Report seller warning:", error);
+      Alert.alert("Error", "Could not submit this report.");
+    } finally {
+      setSubmittingReport(false);
     }
   };
 
@@ -188,36 +370,65 @@ export default function PublicProfileScreen() {
         </View>
 
         <View style={styles.userInfoText}>
-          <ThemedText style={styles.userName}>
-            {userData?.first_name} {userData?.last_name}
-          </ThemedText>
-          <ThemedText style={styles.userType}>{t("user_actions.regular_account")}</ThemedText>
+          <View style={styles.userNameRow}>
+            <ThemedText style={styles.userName}>
+              {userData?.first_name} {userData?.last_name}
+            </ThemedText>
+            {accountEntitlements.hasVerifiedBadge ? (
+              <View style={styles.verifiedBadge}>
+                <CheckCircleIcon size={14} color="#15803D" weight="fill" />
+                <ThemedText style={styles.verifiedBadgeText}>
+                  {t("productDetail.verifiedSeller")}
+                </ThemedText>
+              </View>
+            ) : null}
+          </View>
+          <ThemedText style={styles.userType}>{accountTypeLabel}</ThemedText>
         </View>
 
-        <TouchableOpacity
-          style={[styles.roundBtn, { backgroundColor: themeColors.card }]}
-        >
-          <SquaresFourIcon
-            size={24}
-            color={themeColors.text}
-            weight="regular"
-          />
-        </TouchableOpacity>
       </View>
 
-      <View style={styles.bioRow}>
-        <ThemedText style={styles.bioText}>
-          {userData?.bio || t("public_profile.no_bio")}
-        </ThemedText>
-        {isOwnProfile && (
-          <TouchableOpacity
-            style={styles.editBioBtn}
-            onPress={() => router.push("/user/edit" as Href)}
-          >
-            <PencilSimpleIcon size={16} color={themeColors.text} />
-          </TouchableOpacity>
-        )}
-      </View>
+      {!isBlockedUser && (hasEnhancedProfile || isOwnProfile) ? (
+        <View style={styles.bioRow}>
+          <ThemedText style={styles.bioText}>
+            {hasEnhancedProfile
+              ? userData?.bio || t("public_profile.no_bio")
+              : "Upgrade to Pro to showcase your seller bio on your public profile."}
+          </ThemedText>
+          {isOwnProfile && (
+            <TouchableOpacity
+              style={styles.editBioBtn}
+              onPress={() => router.push("/user/edit" as Href)}
+            >
+              <PencilSimpleIcon size={16} color={themeColors.text} />
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : null}
+
+      {!isBlockedUser && hasEnhancedProfile ? (
+        <View
+          style={[
+            styles.profileHighlights,
+            { backgroundColor: themeColors.card },
+          ]}
+        >
+          <View style={styles.highlightItem}>
+            <ThemedText style={styles.highlightValue}>{products.length}</ThemedText>
+            <ThemedText style={styles.highlightLabel}>Active listings</ThemedText>
+          </View>
+          <View style={styles.highlightDivider} />
+          <View style={styles.highlightItem}>
+            <ThemedText style={styles.highlightValue}>4.9</ThemedText>
+            <ThemedText style={styles.highlightLabel}>Seller rating</ThemedText>
+          </View>
+          <View style={styles.highlightDivider} />
+          <View style={styles.highlightItem}>
+            <ThemedText style={styles.highlightValue}>Fast</ThemedText>
+            <ThemedText style={styles.highlightLabel}>Response pace</ThemedText>
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.statsActionRow}>
         <View style={styles.statsContainer}>
@@ -258,6 +469,8 @@ export default function PublicProfileScreen() {
               {t("public_profile.edit_profile")}
             </ThemedText>
           </TouchableOpacity>
+        ) : isBlockedUser ? (
+          <View style={styles.blockedActionPlaceholder} />
         ) : (
           <View style={styles.otherUserActions}>
             <TouchableOpacity
@@ -297,25 +510,57 @@ export default function PublicProfileScreen() {
         )}
       </View>
 
-      <View style={styles.sectionHeader}>
-        <ThemedText style={styles.sectionTitle}>{t("public_profile.recent_post")}</ThemedText>
-        <View style={styles.viewToggle}>
-          <TouchableOpacity onPress={() => setViewMode("list")}>
-            <RowsIcon
-              size={24}
-              color={themeColors.text}
-              weight={viewMode === "list" ? "fill" : "regular"}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setViewMode("grid")}>
-            <SquaresFourIcon
-              size={24}
-              color={themeColors.text}
-              weight={viewMode === "grid" ? "fill" : "regular"}
-            />
+      {isBlockedUser ? (
+        <View
+          style={[
+            styles.blockedStateCard,
+            { backgroundColor: themeColors.card, borderColor: themeColors.border },
+          ]}
+        >
+          <ThemedText style={styles.blockedStateTitle}>
+            You blocked this seller
+          </ThemedText>
+          <ThemedText
+            style={[styles.blockedStateText, { color: themeColors.text + "99" }]}
+          >
+            Their listings and contact actions are hidden until you unblock them.
+          </ThemedText>
+          <TouchableOpacity
+            style={[
+              styles.unblockBtn,
+              { backgroundColor: Colors.reds[500], opacity: updatingBlockState ? 0.7 : 1 },
+            ]}
+            onPress={handleUnblockUser}
+            disabled={updatingBlockState}
+          >
+            <ThemedText style={styles.unblockBtnText}>
+              {updatingBlockState ? "Updating..." : "Unblock"}
+            </ThemedText>
           </TouchableOpacity>
         </View>
-      </View>
+      ) : null}
+
+      {!isBlockedUser ? (
+        <View style={styles.sectionHeader}>
+          <ThemedText style={styles.sectionTitle}>{t("public_profile.recent_post")}</ThemedText>
+          <View style={styles.viewToggle}>
+            <TouchableOpacity onPress={() => setViewMode("list")}>
+              <RowsIcon
+                size={24}
+                color={themeColors.text}
+                weight={viewMode === "list" ? "fill" : "regular"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setViewMode("grid")}>
+              <SquaresFourIcon
+                size={24}
+                color={themeColors.text}
+                weight={viewMode === "grid" ? "fill" : "regular"}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -398,10 +643,192 @@ export default function PublicProfileScreen() {
           <CaretLeftIcon size={24} color={themeColors.text} weight="bold" />
         </TouchableOpacity>
         <ThemedText style={styles.navTitle}>{t("public_profile.profile")}</ThemedText>
-        <TouchableOpacity style={styles.backBtn}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => setShowProfileMenu((current) => !current)}
+        >
           <DotsThreeIcon size={24} color={themeColors.text} weight="bold" />
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showProfileMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowProfileMenu(false)}
+      >
+        <Pressable
+          style={styles.menuBackdrop}
+          onPress={() => setShowProfileMenu(false)}
+        >
+          <Pressable
+            style={[
+              styles.menuCard,
+              {
+                backgroundColor: themeColors.card,
+                borderColor: themeColors.border,
+              },
+            ]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            {isOwnProfile ? (
+              <>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setShowProfileMenu(false);
+                    router.push("/user/edit" as Href);
+                  }}
+                >
+                  <ThemedText style={styles.menuItemText}>Edit profile</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleShareProfile}
+                >
+                  <ThemedText style={styles.menuItemText}>Share profile</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setShowProfileMenu(false);
+                    router.push("/settings" as Href);
+                  }}
+                >
+                  <ThemedText style={styles.menuItemText}>View settings</ThemedText>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleShareProfile}
+                >
+                  <ThemedText style={styles.menuItemText}>Share profile</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleReportSeller}
+                >
+                  <ThemedText style={styles.menuItemText}>Report seller</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={isBlockedUser ? handleUnblockUser : handleBlockUser}
+                >
+                  <ThemedText style={[styles.menuItemText, styles.menuDangerText]}>
+                    {isBlockedUser ? "Unblock user" : "Block user"}
+                  </ThemedText>
+                </TouchableOpacity>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showReportSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReportSheet(false)}
+      >
+        <Pressable
+          style={styles.menuBackdrop}
+          onPress={() => setShowReportSheet(false)}
+        >
+          <Pressable
+            style={[
+              styles.reportSheet,
+              {
+                backgroundColor: themeColors.card,
+                borderColor: themeColors.border,
+              },
+            ]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <ThemedText style={styles.reportTitle}>Report seller</ThemedText>
+            <ThemedText
+              style={[styles.reportSubtitle, { color: themeColors.text + "99" }]}
+            >
+              Select the reason that best describes the issue.
+            </ThemedText>
+
+            <View style={styles.reportOptions}>
+              {reportReasons.map((reason) => {
+                const selected = selectedReportReason === reason;
+                return (
+                  <TouchableOpacity
+                    key={reason}
+                    style={[
+                      styles.reportOption,
+                      {
+                        backgroundColor: selected
+                          ? "#FDECEC"
+                          : themeColors.background,
+                        borderColor: selected
+                          ? Colors.reds[500]
+                          : themeColors.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedReportReason(reason)}
+                    activeOpacity={0.85}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.reportOptionText,
+                        selected && { color: Colors.reds[500], fontWeight: "700" },
+                      ]}
+                    >
+                      {reason}
+                    </ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.reportActions}>
+              <TouchableOpacity
+                style={[
+                  styles.reportActionSecondary,
+                  { borderColor: themeColors.border },
+                ]}
+                onPress={() => setShowReportSheet(false)}
+              >
+                <ThemedText style={styles.reportActionSecondaryText}>
+                  Cancel
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.reportActionPrimary,
+                  {
+                    backgroundColor: selectedReportReason
+                      ? Colors.reds[500]
+                      : "#F3B7B2",
+                    opacity: selectedReportReason ? 1 : 0.8,
+                  },
+                ]}
+                onPress={handleSubmitReport}
+                disabled={!selectedReportReason || submittingReport}
+              >
+                <ThemedText style={styles.reportActionPrimaryText}>
+                  {submittingReport ? "Submitting..." : "Submit report"}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <ActionStatusModal
+        visible={reportSuccessVisible}
+        hideHeaderTone
+        tone="success"
+        title="Report submitted"
+        description="Thank you. Your report has been sent for review."
+        actionLabel="Continue"
+        onClose={() => setReportSuccessVisible(false)}
+      />
 
       <FlatList
         data={products}
@@ -436,6 +863,124 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     padding: 8,
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.12)",
+  },
+  menuCard: {
+    position: "absolute",
+    top: 58,
+    right: 16,
+    width: 172,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  menuItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  menuDangerText: {
+    color: "#DC2626",
+  },
+  reportSheet: {
+    alignSelf: "center",
+    borderRadius: 22,
+    borderWidth: 1,
+    marginTop: "auto",
+    marginBottom: 24,
+    padding: 18,
+    width: "92%",
+  },
+  reportTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+  reportSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  reportOptions: {
+    gap: 10,
+  },
+  reportOption: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  reportOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  reportActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 18,
+  },
+  reportActionSecondary: {
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    paddingVertical: 13,
+  },
+  reportActionSecondaryText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  reportActionPrimary: {
+    alignItems: "center",
+    borderRadius: 14,
+    flex: 1.2,
+    justifyContent: "center",
+    paddingVertical: 13,
+  },
+  reportActionPrimaryText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  blockedStateCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    marginTop: 16,
+    padding: 16,
+  },
+  blockedActionPlaceholder: {
+    width: 120,
+  },
+  blockedStateTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  blockedStateText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  unblockBtn: {
+    alignItems: "center",
+    borderRadius: 12,
+    marginTop: 4,
+    paddingVertical: 12,
+  },
+  unblockBtnText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
   profileHeader: {
     paddingHorizontal: 16,
@@ -474,23 +1019,34 @@ const styles = StyleSheet.create({
     marginLeft: 16,
     flex: 1,
   },
+  userNameRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   userName: {
     fontSize: 22,
+    fontWeight: "700",
+  },
+  verifiedBadge: {
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  verifiedBadgeText: {
+    color: "#166534",
+    fontSize: 11,
     fontWeight: "700",
   },
   userType: {
     fontSize: 14,
     opacity: 0.5,
     marginTop: 2,
-  },
-  roundBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
   },
   bioRow: {
     flexDirection: "row",
@@ -501,6 +1057,32 @@ const styles = StyleSheet.create({
   bioText: {
     fontSize: 16,
     opacity: 0.8,
+  },
+  profileHighlights: {
+    borderRadius: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  highlightItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  highlightValue: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  highlightLabel: {
+    fontSize: 12,
+    marginTop: 4,
+    opacity: 0.6,
+    textAlign: "center",
+  },
+  highlightDivider: {
+    backgroundColor: "#E5E7EB",
+    width: 1,
   },
   editBioBtn: {
     padding: 4,

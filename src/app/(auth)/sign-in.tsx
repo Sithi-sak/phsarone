@@ -67,7 +67,7 @@ export default function SignInPage() {
 
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
-        router.replace("/(tabs)");
+        router.replace("/");
       } else if (signInAttempt.status === "needs_first_factor") {
         // Account exists but needs verification
         Alert.alert(
@@ -137,7 +137,7 @@ export default function SignInPage() {
 
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
-        router.replace("/(tabs)");
+        router.replace("/");
       } else {
         const errorMsg = "Invalid or expired verification code";
         setError(errorMsg);

@@ -137,6 +137,11 @@ function SwipeableConversationItem({
         case "image":
           lastMessage = t("chat.photo") || "Image";
           break;
+        case "trade_offer":
+          lastMessage = parsed.offeredItemTitle
+            ? `Trade offer: ${parsed.offeredItemTitle}`
+            : "Trade offer";
+          break;
         case "location":
           lastMessage = t("chat.location") || "Location";
           break;

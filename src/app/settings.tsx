@@ -11,7 +11,6 @@ import {
   HeadphonesIcon,
   InfoIcon,
   LockIcon,
-  MapPinIcon,
   UserCircleIcon,
 } from "phosphor-react-native";
 import React from "react";
@@ -93,11 +92,6 @@ export default function SettingsScreen() {
       >
         <View style={[styles.card, { backgroundColor: themeColors.card }]}>
           <SettingItem
-            icon={MapPinIcon}
-            label={t("settings_screen.my_addresses")}
-            onPress={goTo("/settings/addresses")}
-          />
-          <SettingItem
             icon={UserCircleIcon}
             label={t("settings_screen.account_security")}
             onPress={goTo("/settings/account-security")}
@@ -105,7 +99,7 @@ export default function SettingsScreen() {
           <SettingItem
             icon={CreditCardIcon}
             label={t("settings_screen.payment_settings")}
-            onPress={goTo("/settings/subscription")}
+            onPress={goTo("/settings/payment-settings")}
             showSeparator={false}
           />
         </View>

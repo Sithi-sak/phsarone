@@ -1,10 +1,12 @@
 import DynamicPhosphorIcon from "@/src/components/shared_components/DynamicPhosphorIcon";
+import UpgradePromptModal from "@/src/components/shared_components/UpgradePromptModal";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { Colors } from "@src/constants/Colors";
 import { useTheme } from "@src/context/ThemeContext";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { getEntitlements } from "@src/lib/entitlements";
 import { supabase } from "@src/lib/supabase";
 import { LinearGradient } from "expo-linear-gradient";
 import { Href, useFocusEffect, useRouter } from "expo-router";
@@ -12,6 +14,7 @@ import {
   BookmarkSimpleIcon,
   CardholderIcon,
   CaretRightIcon,
+  CheckCircleIcon,
   ChartBarIcon,
   ChartPieSliceIcon,
   ClockCountdownIcon,
@@ -50,6 +53,17 @@ export default function ProfileScreen() {
   const router = useRouter();
 
   const [dbUser, setDbUser] = useState<any>(null);
+  const [upgradePrompt, setUpgradePrompt] = useState<{
+    description: string;
+    recommendedPlan: "starter" | "business";
+    title: string;
+    visible: boolean;
+  }>({
+    description: "",
+    recommendedPlan: "starter",
+    title: "",
+    visible: false,
+  });
 
   const scrollAnim = useRef(new Animated.Value(0)).current;
   const headerOpacityAnim = useRef(new Animated.Value(1)).current;
@@ -74,7 +88,7 @@ export default function ProfileScreen() {
       if (error) throw error;
       setDbUser(data);
     } catch (error) {
-      console.error("Error fetching user for profile:", error);
+      console.warn("Profile fetch warning:", error);
     }
   };
 
@@ -86,6 +100,9 @@ export default function ProfileScreen() {
   const avatarUrl = dbUser?.avatar_url || clerkUser?.imageUrl;
 
   const accountType = String(dbUser?.user_type || "regular").toLowerCase();
+  const accountEntitlements = getEntitlements({
+    fallbackUserType: accountType,
+  });
   const accountTypeLabel =
     accountType === "starter"
       ? `${t("subscription_screen.starter")} Plan`
@@ -105,6 +122,32 @@ export default function ProfileScreen() {
     await AsyncStorage.setItem("user-language", nextLanguage);
   };
 
+  const openAnalyticsScreen = (
+    pathname: Href,
+    options: {
+      title: string;
+      requiresBusiness?: boolean;
+    },
+  ) => {
+    const hasAccess = options.requiresBusiness
+      ? accountEntitlements.hasAdvancedAnalytics
+      : accountEntitlements.hasBasicAnalytics;
+
+    if (hasAccess) {
+      router.push(pathname);
+      return;
+    }
+
+    setUpgradePrompt({
+      description: options.requiresBusiness
+        ? `${options.title} is available on the Business plan.`
+        : `${options.title} is available on Starter, Pro, and Business plans.`,
+      recommendedPlan: options.requiresBusiness ? "business" : "starter",
+      title: "Upgrade required",
+      visible: true,
+    });
+  };
+
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
     { useNativeDriver: false },
@@ -121,6 +164,22 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+      <UpgradePromptModal
+        visible={upgradePrompt.visible}
+        title={upgradePrompt.title}
+        description={upgradePrompt.description}
+        onClose={() =>
+          setUpgradePrompt((current) => ({ ...current, visible: false }))
+        }
+        onConfirm={() => {
+          const recommendedPlan = upgradePrompt.recommendedPlan;
+          setUpgradePrompt((current) => ({ ...current, visible: false }));
+          router.push({
+            pathname: "/subscription" as Href,
+            params: { plan: recommendedPlan },
+          });
+        }}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
@@ -214,7 +273,27 @@ export default function ProfileScreen() {
               )}
             </View>
             <View style={styles.userTextContainer}>
-              <ThemedText style={styles.userName}>{displayName}</ThemedText>
+              <View style={styles.userNameRow}>
+                <ThemedText
+                  style={styles.userName}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {displayName}
+                </ThemedText>
+                {accountEntitlements.hasVerifiedBadge ? (
+                  <View style={styles.verifiedBadge}>
+                    <CheckCircleIcon
+                      size={14}
+                      color="#15803D"
+                      weight="fill"
+                    />
+                    <ThemedText style={styles.verifiedBadgeText}>
+                      Verified
+                    </ThemedText>
+                  </View>
+                ) : null}
+              </View>
               <ThemedText style={styles.userType}>
                 {accountTypeLabel}
               </ThemedText>
@@ -269,12 +348,21 @@ export default function ProfileScreen() {
             <GridItem
               icon={<ChartPieSliceIcon size={24} color={themeColors.text} />}
               label={t("user_actions.overview")}
-              onPress={() => router.push("/user/dashboard/overview" as Href)}
+              onPress={() =>
+                openAnalyticsScreen("/user/dashboard/overview" as Href, {
+                  title: "Overview analytics",
+                })
+              }
             />
             <GridItem
               icon={<ChartBarIcon size={24} color={themeColors.text} />}
               label={t("user_actions.insight")}
-              onPress={() => router.push("/user/dashboard/insight" as Href)}
+              onPress={() =>
+                openAnalyticsScreen("/user/dashboard/insight" as Href, {
+                  title: "Insights",
+                  requiresBusiness: true,
+                })
+              }
             />
             <GridItem
               icon={<TagSimpleIcon size={24} color={themeColors.text} />}
@@ -286,7 +374,11 @@ export default function ProfileScreen() {
                 <PresentationChartIcon size={24} color={themeColors.text} />
               }
               label={t("user_actions.performance")}
-              onPress={() => router.push("/user/dashboard/performance" as Href)}
+              onPress={() =>
+                openAnalyticsScreen("/user/dashboard/performance" as Href, {
+                  title: "Performance analytics",
+                })
+              }
             />
           </ProfileSection>
 
@@ -318,7 +410,7 @@ export default function ProfileScreen() {
             />
             <GridItem
               icon={<CardholderIcon size={24} color={themeColors.text} />}
-              label={t("user_actions.billing")}
+              label={t("subscription_screen.subscriptions")}
               onPress={() => router.push("/settings/subscription" as Href)}
             />
             <GridItem
@@ -408,12 +500,12 @@ const styles = StyleSheet.create({
   userInfo: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 20,
+    padding: 18,
   },
   avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
@@ -423,11 +515,34 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   userTextContainer: {
+    flex: 1,
     marginLeft: 15,
+    minWidth: 0,
+  },
+  userNameRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    minWidth: 0,
   },
   userName: {
-    fontSize: 22,
+    flexShrink: 1,
+    fontSize: 19,
     fontWeight: "bold",
+  },
+  verifiedBadge: {
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  verifiedBadgeText: {
+    color: "#166534",
+    fontSize: 10,
+    fontWeight: "700",
   },
   userType: {
     fontSize: 14,

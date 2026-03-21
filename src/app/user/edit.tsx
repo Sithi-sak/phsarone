@@ -1,7 +1,9 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
+import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { ThemedTextInput } from "@src/components/shared_components/ThemedTextInput";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { normalizeImageForUpload } from "@src/utils/imageUpload";
 import { getAuthToken } from "@src/lib/auth";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { decode } from "base64-arraybuffer";
@@ -24,6 +26,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const PROFILE_AUTH_OPTIONS = {
+  timeoutMs: 45000,
+  retries: 2,
+} as const;
+
 export default function EditProfileScreen() {
   const { userId, getToken } = useAuth();
   const { user: clerkUser } = useUser();
@@ -33,6 +40,7 @@ export default function EditProfileScreen() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -49,7 +57,11 @@ export default function EditProfileScreen() {
     if (!userId) return;
     try {
       setLoading(true);
-      const token = await getAuthToken(getToken, "profile fetch");
+      const token = await getAuthToken(
+        getToken,
+        "profile fetch",
+        PROFILE_AUTH_OPTIONS,
+      );
       const supabase = createClerkSupabaseClient(token);
 
       const { data, error } = await supabase
@@ -70,7 +82,7 @@ export default function EditProfileScreen() {
         });
       }
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      console.warn("Profile fetch warning:", error);
     } finally {
       setLoading(false);
     }
@@ -85,7 +97,11 @@ export default function EditProfileScreen() {
     });
 
     if (!result.canceled) {
-      uploadAvatar(result.assets[0].uri);
+      const normalizedUri = await normalizeImageForUpload(result.assets[0].uri, {
+        maxDimension: 900,
+        compress: 0.7,
+      });
+      uploadAvatar(normalizedUri);
     }
   };
 
@@ -93,7 +109,11 @@ export default function EditProfileScreen() {
     if (!userId) return;
     try {
       setSaving(true);
-      const token = await getAuthToken(getToken, "profile avatar upload");
+      const token = await getAuthToken(
+        getToken,
+        "profile avatar upload",
+        PROFILE_AUTH_OPTIONS,
+      );
       const supabase = createClerkSupabaseClient(token);
 
       const fileName = `${userId as string}/avatar-${Date.now()}.jpg`;
@@ -127,7 +147,11 @@ export default function EditProfileScreen() {
     if (!userId) return;
     try {
       setSaving(true);
-      const token = await getAuthToken(getToken, "profile save");
+      const token = await getAuthToken(
+        getToken,
+        "profile save",
+        PROFILE_AUTH_OPTIONS,
+      );
       const supabase = createClerkSupabaseClient(token);
 
       const { error } = await supabase
@@ -143,8 +167,7 @@ export default function EditProfileScreen() {
 
       if (error) throw error;
 
-      Alert.alert(t("success"), t("profile_screen.update_success"));
-      router.back();
+      setShowSuccessModal(true);
     } catch (error) {
       console.error("Save error:", error);
       Alert.alert(t("error"), t("profile_screen.update_failed"));
@@ -309,6 +332,19 @@ export default function EditProfileScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ActionStatusModal
+        visible={showSuccessModal}
+        tone="success"
+        hideHeaderTone
+        title={t("success")}
+        description={t("profile_screen.update_success")}
+        actionLabel="Continue"
+        onClose={() => {
+          setShowSuccessModal(false);
+          router.back();
+        }}
+      />
     </SafeAreaView>
   );
 }

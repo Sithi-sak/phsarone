@@ -4,6 +4,7 @@ import FormattedProductPreview from "@src/components/sell_components/FormattedPr
 import FormattingFeatureBanner from "@src/components/sell_components/FormattingFeatureBanner";
 import PriceAndDiscountForm from "@src/components/sell_components/PriceAndDiscountForm";
 import ProductDetailsCompletion from "@src/components/sell_components/ProductDetailsCompletion";
+import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
 import AddressDropdowns from "@src/components/shared_components/AddressDropdowns";
 import LocationPickerMap from "@src/components/shared_components/LocationPickerMap";
 import PhotoUploadSection from "@src/components/shared_components/PhotoUploadSection";
@@ -35,13 +36,26 @@ export default function ProductDetailsForm() {
   const { editId } = useLocalSearchParams<{ editId: string }>();
   const [isInitialLoading, setIsInitialLoading] = useState(!!editId);
   const [showFormattedDetails, setShowFormattedDetails] = useState(true);
+  const [successPrompt, setSuccessPrompt] = useState<{
+    description: string;
+    tone?: "error" | "info" | "success";
+    title: string;
+    visible: boolean;
+  }>({
+    description: "",
+    title: "",
+    tone: "success",
+    visible: false,
+  });
 
   const fields = POST_FIELDS_MAP[draft.subCategory] || [];
   const themeColors = useThemeColor();
 
-  const { postProduct, updateProduct, fetchProductForEdit, isPosting } =
+  const { postProduct, saveDraft, updateProduct, fetchProductForEdit, isPosting } =
     usePostProduct();
   const router = useRouter();
+  const editingStatus = String((draft as any)._status || "").toLowerCase();
+  const isDraftFlow = !editId || editingStatus === "draft";
 
   // Load existing product if editId is provided
   useEffect(() => {
@@ -80,6 +94,29 @@ export default function ProductDetailsForm() {
     updateDraft("location", location);
   };
 
+  const handleSaveDraft = async () => {
+    try {
+      await saveDraft(draft, editId);
+      setSuccessPrompt({
+        description: t("sellSection.draft_success"),
+        title: t("sellSection.draft_saved_title"),
+        tone: "success",
+        visible: true,
+      });
+      resetDraft();
+    } catch (error: any) {
+      const message = error.message || t("sellSection.save_failed");
+      setSuccessPrompt({
+        description: message,
+        title: message.includes("prohibited content")
+          ? "Listing not allowed"
+          : t("common.error"),
+        tone: "error",
+        visible: true,
+      });
+    }
+  };
+
   const handlePost = async () => {
     if (!draft.photos || draft.photos.length === 0) {
       Alert.alert(t("common.error"), t("sellSection.photo_required"));
@@ -87,21 +124,42 @@ export default function ProductDetailsForm() {
     }
 
     try {
-      if (editId) {
+      if (editId && editingStatus !== "draft") {
         await updateProduct(editId, draft);
-        Alert.alert(t("common.success"), t("sellSection.update_success"));
+        setSuccessPrompt({
+          description: t("sellSection.update_success"),
+          title: t("sellSection.update_title"),
+          tone: "success",
+          visible: true,
+        });
+      } else if (editId && editingStatus === "draft") {
+        await updateProduct(editId, draft);
+        setSuccessPrompt({
+          description: t("sellSection.post_success"),
+          title: t("sellSection.publish_title"),
+          tone: "success",
+          visible: true,
+        });
       } else {
         await postProduct(draft);
-        Alert.alert(t("common.success"), t("sellSection.post_success"));
+        setSuccessPrompt({
+          description: t("sellSection.post_success"),
+          title: t("sellSection.publish_title"),
+          tone: "success",
+          visible: true,
+        });
       }
       resetDraft();
-      router.replace("/(tabs)");
     } catch (error: any) {
-      console.error("Post handle error:", error);
-      Alert.alert(
-        t("common.error"),
-        error.message || t("sellSection.save_failed"),
-      );
+      const message = error.message || t("sellSection.save_failed");
+      setSuccessPrompt({
+        description: message,
+        title: message.includes("prohibited content")
+          ? "Listing not allowed"
+          : t("common.error"),
+        tone: "error",
+        visible: true,
+      });
     }
   };
 
@@ -129,6 +187,25 @@ export default function ProductDetailsForm() {
       edges={["top", "left", "right"]}
       style={{ flex: 1, backgroundColor: themeColors.background }}
     >
+      <ActionStatusModal
+        visible={successPrompt.visible}
+        hideHeaderTone
+        title={successPrompt.title}
+        description={successPrompt.description}
+        actionLabel="Continue"
+        tone={successPrompt.tone}
+        onClose={() => {
+          const shouldGoHome = successPrompt.tone !== "error";
+          setSuccessPrompt((current) => ({
+            ...current,
+            tone: "success",
+            visible: false,
+          }));
+          if (shouldGoHome) {
+            router.replace("/(tabs)");
+          }
+        }}
+      />
       <Stack.Screen options={{ headerShown: false }} />
 
       <View
@@ -195,7 +272,8 @@ export default function ProductDetailsForm() {
 
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: themeColors.background }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior="padding"
+        enabled={Platform.OS === "ios"}
       >
         <FlatList
           data={[{ key: "formContent" }]}
@@ -291,12 +369,12 @@ export default function ProductDetailsForm() {
                     styles.cancelBtn,
                     { backgroundColor: themeColors.secondaryBackground },
                   ]}
-                  onPress={handleNavigateBack}
+                  onPress={isDraftFlow ? handleSaveDraft : handleNavigateBack}
                 >
                   <ThemedText
                     style={[styles.cancelBtnText, { color: themeColors.text }]}
                   >
-                    {t("common.cancel")}
+                    {isDraftFlow ? t("sellSection.save_draft") : t("common.cancel")}
                   </ThemedText>
                 </TouchableOpacity>
 
@@ -312,9 +390,9 @@ export default function ProductDetailsForm() {
                   <ThemedText style={styles.submitBtnText}>
                     {isPosting
                       ? t("sellSection.saving")
-                      : editId
+                      : editId && !isDraftFlow
                         ? t("sellSection.update")
-                        : t("sellSection.save")}
+                        : t("sellSection.post")}
                   </ThemedText>
                 </TouchableOpacity>
               </View>
@@ -386,11 +464,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderCurve: "continuous",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
   },
   sectionTitle: {
     fontSize: 16,

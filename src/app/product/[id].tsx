@@ -12,9 +12,11 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,6 +31,7 @@ import { CAMBODIA_LOCATIONS } from "@src/constants/CambodiaLocations";
 import { CATEGORY_MAP } from "@src/constants/CategoryData";
 import { useProductDetails } from "@src/hooks/useProductDetails";
 import { getAuthToken } from "@src/lib/auth";
+import { getEntitlements } from "@src/lib/entitlements";
 import { createClerkSupabaseClient, supabase } from "@src/lib/supabase";
 import { formatProductDetails } from "@src/utils/productUtils";
 
@@ -41,6 +44,7 @@ import ProductImageGallery from "@src/components/productDetails_components/Produ
 import ProductInfoSection from "@src/components/productDetails_components/ProductInfoSection";
 import ProductLocation from "@src/components/productDetails_components/ProductLocation";
 import SellerInfoSection from "@src/components/productDetails_components/SellerInfoSection";
+import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { useConversations } from "@src/hooks/useChat";
 
@@ -64,6 +68,10 @@ export default function ProductDetail() {
   const router = useRouter();
 
   const [isFavorite, setIsFavorite] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
+  const [selectedReportReason, setSelectedReportReason] = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportSuccessVisible, setReportSuccessVisible] = useState(false);
   const { product: rawProduct, loading: productLoading } = useProductDetails(
     id as string,
   );
@@ -113,7 +121,7 @@ export default function ProductDetail() {
         );
       }
     } catch (error) {
-      console.error("Error logging view:", error);
+      console.warn("Product view logging warning:", error);
     }
   };
 
@@ -132,7 +140,7 @@ export default function ProductDetail() {
       if (error) throw error;
       setIsFavorite(!!data);
     } catch (error) {
-      console.error("Error checking favorite status:", error);
+      console.warn("Favorite status fetch warning:", error);
     }
   };
 
@@ -199,6 +207,10 @@ export default function ProductDetail() {
         ? "fixed"
         : "none";
 
+  const sellerEntitlements = getEntitlements({
+    fallbackUserType: rawProduct.seller?.user_type,
+  });
+
   const product: Product = {
     ...rawProduct,
     id: rawProduct.id,
@@ -218,23 +230,25 @@ export default function ProductDetail() {
     location: rawProduct.metadata?.location || { latitude: 0, longitude: 0 },
     details: rawProduct.metadata || {},
     contact: {
-      sellerName: rawProduct.seller?.first_name || "Unknown",
+      sellerName:
+        `${rawProduct.seller?.first_name || ""} ${rawProduct.seller?.last_name || ""}`.trim() ||
+        rawProduct.seller?.first_name ||
+        "Unknown",
       phones: rawProduct.seller?.phone ? [rawProduct.seller.phone] : [],
       email: rawProduct.seller?.email || "",
     },
     seller: {
       id: rawProduct.seller?.id,
-      name: rawProduct.seller?.first_name || "Seller",
+      name:
+        `${rawProduct.seller?.first_name || ""} ${rawProduct.seller?.last_name || ""}`.trim() ||
+        rawProduct.seller?.first_name ||
+        "Seller",
       avatar: rawProduct.seller?.avatar_url,
-      verified: true,
-      trusted: true,
-      rating: 5.0,
-      totalListings: 1,
+      verified: sellerEntitlements.hasVerifiedBadge,
+      trusted: sellerEntitlements.hasSellerProfileEnhancement,
+      rating: sellerEntitlements.hasSellerProfileEnhancement ? 5.0 : undefined,
+      totalListings: sellerEntitlements.hasSellerProfileEnhancement ? 1 : undefined,
     },
-  };
-
-  const handleShare = () => {
-    console.log("Sharing product...");
   };
 
   const handleFavorite = async () => {
@@ -342,6 +356,55 @@ export default function ProductDetail() {
     ]);
   };
 
+  const reportReasons = [
+    "Unsafe or prohibited item",
+    "Weapons or explosives",
+    "Drugs or illegal substances",
+    "Adult or explicit content",
+    "Scam or misleading listing",
+  ];
+
+  const handleReportProduct = () => {
+    if (!userId) {
+      Alert.alert(
+        t("common.sign_in_required"),
+        "Please sign in to report this listing.",
+      );
+      return;
+    }
+    setSelectedReportReason("");
+    setShowReportSheet(true);
+  };
+
+  const handleSubmitProductReport = async () => {
+    if (!userId || !selectedReportReason) return;
+
+    try {
+      setSubmittingReport(true);
+      const token = await getAuthToken(getToken, "product report submit", {
+        timeoutMs: 45000,
+        retries: 2,
+      });
+      const authSupabase = createClerkSupabaseClient(token);
+      const { error } = await authSupabase.from("reports").insert({
+        reporter_id: userId,
+        target_product_id: product.id,
+        reason: selectedReportReason,
+        status: "pending",
+      });
+
+      if (error) throw error;
+
+      setShowReportSheet(false);
+      setReportSuccessVisible(true);
+    } catch (error) {
+      console.warn("Report product warning:", error);
+      Alert.alert("Error", "Could not submit this report.");
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
+
   const getLocalizedLocationName = (
     englishName: string | null | undefined,
     currentLanguage: string,
@@ -424,12 +487,112 @@ export default function ProductDetail() {
       style={[styles.container, { backgroundColor: themeColors.background }]}
     >
       <Stack.Screen options={{ headerShown: false }} />
+      <ActionStatusModal
+        visible={reportSuccessVisible}
+        hideHeaderTone
+        title="Report submitted"
+        description="Thanks. We will review this listing."
+        actionLabel="OK"
+        onClose={() => setReportSuccessVisible(false)}
+      />
 
       <ProductHeader
-        onShare={handleShare}
         onFavorite={handleFavorite}
         isFavorite={isFavorite}
+        showMoreButton={!isOwner}
+        onMorePress={handleReportProduct}
       />
+
+      <Modal
+        visible={showReportSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReportSheet(false)}
+      >
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setShowReportSheet(false)}
+          />
+          <View
+            style={[
+              styles.reportSheet,
+              {
+                backgroundColor: themeColors.card,
+                borderColor: themeColors.border,
+              },
+            ]}
+          >
+            <ThemedText style={styles.reportTitle}>Report listing</ThemedText>
+            <ThemedText style={styles.reportSubtitle}>
+              Tell us why this post should be reviewed.
+            </ThemedText>
+
+            {reportReasons.map((reason) => {
+              const selected = selectedReportReason === reason;
+              return (
+                <TouchableOpacity
+                  key={reason}
+                  style={[
+                    styles.reportReasonButton,
+                    {
+                      backgroundColor: selected
+                        ? `${themeColors.primary}14`
+                        : themeColors.background,
+                      borderColor: selected
+                        ? themeColors.primary
+                        : themeColors.border,
+                    },
+                  ]}
+                  onPress={() => setSelectedReportReason(reason)}
+                >
+                  <ThemedText
+                    style={[
+                      styles.reportReasonText,
+                      { color: selected ? themeColors.primary : themeColors.text },
+                    ]}
+                  >
+                    {reason}
+                  </ThemedText>
+                </TouchableOpacity>
+              );
+            })}
+
+            <View style={styles.reportActions}>
+              <TouchableOpacity
+                style={[
+                  styles.reportSecondaryButton,
+                  {
+                    backgroundColor: themeColors.background,
+                    borderColor: themeColors.border,
+                  },
+                ]}
+                onPress={() => setShowReportSheet(false)}
+              >
+                <ThemedText
+                  style={[styles.reportSecondaryText, { color: themeColors.text }]}
+                >
+                  Cancel
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.reportPrimaryButton,
+                  { backgroundColor: themeColors.primary },
+                  !selectedReportReason && { opacity: 0.55 },
+                ]}
+                onPress={handleSubmitProductReport}
+                disabled={!selectedReportReason || submittingReport}
+              >
+                <ThemedText style={styles.reportPrimaryText}>
+                  {submittingReport ? "Submitting..." : "Submit report"}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View style={{ flex: 1 }}>
         <ScrollView
@@ -569,5 +732,66 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(0,0,0,0.05)",
     elevation: 10,
+  },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.34)",
+    justifyContent: "flex-end",
+    padding: 16,
+  },
+  reportSheet: {
+    borderRadius: 24,
+    borderCurve: "continuous",
+    borderWidth: 1,
+    padding: 18,
+    gap: 12,
+  },
+  reportTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  reportSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.7,
+  },
+  reportReasonButton: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  reportReasonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  reportActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  reportSecondaryButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+  },
+  reportSecondaryText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  reportPrimaryButton: {
+    flex: 1.2,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+  },
+  reportPrimaryText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

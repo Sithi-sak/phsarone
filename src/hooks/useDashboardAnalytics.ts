@@ -298,7 +298,7 @@ function shouldRetryDashboardError(message: string): boolean {
     value.includes("abort")
   );
 }
-export function useDashboardAnalytics() {
+export function useDashboardAnalytics(enabled = true) {
   const { userId, getToken } = useAuth();
 
   const [data, setData] = useState<DashboardAnalyticsData>(DEFAULT_DATA);
@@ -311,7 +311,7 @@ export function useDashboardAnalytics() {
     getTokenRef.current = getToken;
   }, [getToken]);
   const refresh = useCallback(async (hasRetried = false) => {
-    if (!userId) {
+    if (!enabled || !userId) {
       setData(DEFAULT_DATA);
       setLoading(false);
       setError(null);
@@ -603,16 +603,15 @@ export function useDashboardAnalytics() {
         return refresh(true);
       }
 
-      console.error(
-        "Error loading dashboard analytics:",
+      console.warn(
+        "Dashboard analytics warning:",
         normalizedError || "Unknown dashboard analytics error",
-        fetchError,
       );
       setError(normalizedError || "Failed to load dashboard analytics. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [enabled, userId]);
 
   useEffect(() => {
     refresh();

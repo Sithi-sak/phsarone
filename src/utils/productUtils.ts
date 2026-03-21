@@ -1,4 +1,5 @@
 import { POST_FIELDS_MAP } from "@src/constants/postFields";
+import { getEntitlements } from "@src/lib/entitlements";
 import { Address, Location, Product, ProductDraft, SellerContact } from "@src/types/productTypes"; // Added ProductDraft
 import i18n from "../i18n"; // Added i18n import
 
@@ -14,7 +15,15 @@ export const formatProductDetails = (
   const formattedDetails: Record<string, string> = {};
 
   fields.forEach((field) => {
-    const value = productData[field.key];
+    const value =
+      field.key === "location"
+        ? typeof productData.locationText === "string" &&
+          productData.locationText.trim().length > 0
+          ? productData.locationText
+          : typeof productData.location === "string"
+            ? productData.location
+            : ""
+        : productData[field.key];
     if (value !== undefined && value !== null && value !== "") {
       formattedDetails[field.key] = String(value);
     }
@@ -45,6 +54,9 @@ export const generateMockProduct = (
     phones: ["+85512345678"],
     email: "sarah.chen@example.com",
   };
+  const sellerEntitlements = getEntitlements({
+    fallbackUserType: "business",
+  });
 
   const baseProduct: Product = {
     id,
@@ -74,8 +86,8 @@ export const generateMockProduct = (
       id: "seller1",
       name: "Sarah Chen",
       avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-      verified: true,
-      trusted: true,
+      verified: sellerEntitlements.hasVerifiedBadge,
+      trusted: sellerEntitlements.hasSellerProfileEnhancement,
     },
   };
 

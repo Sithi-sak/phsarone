@@ -3,12 +3,12 @@ import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { useImageSuggestions } from "@src/hooks/useImageSuggestions";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { analyzeImageQuality } from "@src/utils/imageQuality";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { ImagesIcon, LightbulbIcon, PlusIcon } from "phosphor-react-native";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   Dimensions,
   Image,
   Modal,
@@ -27,6 +27,8 @@ interface PhotoUploadSectionProps {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_GAP = 10;
 const SQUARE_SIZE = (SCREEN_WIDTH - 64 - GRID_GAP * 2) / 3;
+const MAX_UPLOAD_DIMENSION = 1280;
+const NORMALIZED_IMAGE_QUALITY = 0.72;
 
 export default function PhotoUploadSection({
   photos,
@@ -42,16 +44,39 @@ export default function PhotoUploadSection({
   const validateImage = async (uri: string) => {
     const metrics = await analyzeImageQuality(uri);
 
-    // Strict gate: block images that are likely blurry/low-quality or badly framed.
-    const isRejected =
-      metrics.qualityScore < 60 ||
-      metrics.isLowResolution ||
-      !!metrics.issues.aspectRatio;
-
     return {
-      isRejected,
       metrics,
     };
+  };
+
+  const normalizeImage = async (
+    asset: ImagePicker.ImagePickerAsset,
+  ): Promise<string> => {
+    const width = asset.width ?? 0;
+    const height = asset.height ?? 0;
+
+    const shouldResize =
+      width > MAX_UPLOAD_DIMENSION || height > MAX_UPLOAD_DIMENSION;
+
+    if (!shouldResize) {
+      return asset.uri;
+    }
+
+    const resizeAction =
+      width >= height
+        ? { resize: { width: MAX_UPLOAD_DIMENSION } }
+        : { resize: { height: MAX_UPLOAD_DIMENSION } };
+
+    const result = await ImageManipulator.manipulateAsync(
+      asset.uri,
+      [resizeAction],
+      {
+        compress: NORMALIZED_IMAGE_QUALITY,
+        format: ImageManipulator.SaveFormat.JPEG,
+      },
+    );
+
+    return result.uri;
   };
 
   const pickImage = async () => {
@@ -59,55 +84,30 @@ export default function PhotoUploadSection({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: 5 - photos.length,
-      quality: 0.7,
+      quality: 0.6,
     });
 
     if (!result.canceled) {
       const acceptedUris: string[] = [];
-      const rejectedMessages: string[] = [];
 
       for (const asset of result.assets) {
         try {
-          const { isRejected, metrics } = await validateImage(asset.uri);
+          const normalizedUri = await normalizeImage(asset);
+          const { metrics } = await validateImage(normalizedUri);
 
-          if (isRejected) {
-            const reason = metrics.issues.resolution
-              ? t("sellSection.image_resolution_low", {
-                  defaultValue: "Increase image resolution",
-                })
-              : metrics.issues.aspectRatio
-                ? t("sellSection.image_aspect_ratio_extreme", {
-                    defaultValue:
-                      "Image is very narrow or wide - consider a more balanced aspect ratio",
-                  })
-                : t("sellSection.image_quality_check", {
-                    defaultValue: "Image quality check failed",
-                  });
-
-            rejectedMessages.push(`${metrics.fileName || "image"}: ${reason}`);
-            continue;
+          if (metrics.isLowResolution || metrics.isHighFileSize || metrics.issues.aspectRatio) {
+            console.log("Photo quality advisory:", {
+              fileName: metrics.fileName || asset.fileName || "image",
+              isLowResolution: metrics.isLowResolution,
+              isHighFileSize: metrics.isHighFileSize,
+              aspectRatioIssue: metrics.issues.aspectRatio,
+            });
           }
 
-          acceptedUris.push(asset.uri);
+          acceptedUris.push(normalizedUri);
         } catch {
-          rejectedMessages.push(
-            `${asset.fileName || "image"}: ${t(
-              "sellSection.image_quality_check",
-              {
-                defaultValue: "Unable to validate image quality",
-              },
-            )}`,
-          );
+          acceptedUris.push(asset.uri);
         }
-      }
-
-      if (rejectedMessages.length > 0) {
-        Alert.alert(
-          t("common.error", { defaultValue: "Error" }),
-          `${t("sellSection.image_quality_check", {
-            defaultValue: "Image quality check",
-          })}\n\n${rejectedMessages.slice(0, 3).join("\n")}`,
-        );
       }
 
       if (acceptedUris.length > 0) {

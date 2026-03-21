@@ -1,10 +1,13 @@
 import { useAuth } from "@clerk/clerk-expo";
+import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
+import BoostListingModal from "@src/components/shared_components/BoostListingModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
+import UpgradePromptModal from "@src/components/shared_components/UpgradePromptModal";
+import { useBoostProduct } from "@src/hooks/useBoostProduct";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { getAuthToken } from "@src/lib/auth";
 import { getEntitlements } from "@src/lib/entitlements";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
-import { formatPrice, formatTimeAgo } from "@src/utils/productUtils";
 import {
   createListingExpiryFromNow,
   getDaysUntilListingExpiry,
@@ -12,9 +15,9 @@ import {
   getListingExpiryDate,
   normalizePlanType,
 } from "@src/utils/listingExpiry";
+import { formatPrice, formatTimeAgo } from "@src/utils/productUtils";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
-  ArrowsClockwiseIcon,
   ArrowsCounterClockwiseIcon,
   CaretLeftIcon,
   ChatTeardropTextIcon,
@@ -22,8 +25,6 @@ import {
   PauseIcon,
   PencilSimpleIcon,
   RocketLaunchIcon,
-  TrashIcon,
-  WarningCircleIcon,
 } from "phosphor-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -39,6 +40,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const LISTINGS_AUTH_OPTIONS = {
+  timeoutMs: 45000,
+  retries: 2,
+} as const;
+
 export default function MyListingsScreen() {
   const { userId, getToken } = useAuth();
   const { status } = useLocalSearchParams<{ status: string }>(); // 'active', 'sold', 'draft', 'expired'
@@ -51,20 +57,61 @@ export default function MyListingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userPlanType, setUserPlanType] = useState("regular");
   const [activeListingCount, setActiveListingCount] = useState(0);
+  const [monthlyBoostsUsed, setMonthlyBoostsUsed] = useState(0);
+  const [boostPrompt, setBoostPrompt] = useState<{
+    description: string;
+    productId: string | null;
+    title: string;
+    visible: boolean;
+  }>({
+    description: "",
+    productId: null,
+    title: "",
+    visible: false,
+  });
+  const [boostSuccessPrompt, setBoostSuccessPrompt] = useState<{
+    description: string;
+    title: string;
+    tone?: "error" | "info" | "success";
+    visible: boolean;
+  }>({
+    description: "",
+    title: "",
+    tone: "success",
+    visible: false,
+  });
+  const [boostUpgradePromptVisible, setBoostUpgradePromptVisible] =
+    useState(false);
+  const { boostProduct, boostingProductId } = useBoostProduct();
 
   const fetchMyProducts = async () => {
     if (!userId) return;
     try {
       setLoading(true);
-      const token = await getAuthToken(getToken, "my listings fetch");
+      const token = await getAuthToken(
+        getToken,
+        "my listings fetch",
+        LISTINGS_AUTH_OPTIONS,
+      );
       const authSupabase = createClerkSupabaseClient(token);
 
-      const [userResult, productResult] = await Promise.all([
+      const monthStart = new Date(
+        new Date().getFullYear(),
+        new Date().getMonth(),
+        1,
+      ).toISOString();
+
+      const [userResult, boostUsageResult, productResult] = await Promise.all([
         authSupabase
           .from("users")
           .select("user_type")
           .eq("id", userId)
           .maybeSingle(),
+        authSupabase
+          .from("product_boosts")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .gte("created_at", monthStart),
         authSupabase
           .from("products")
           .select("*")
@@ -73,14 +120,60 @@ export default function MyListingsScreen() {
       ]);
 
       if (userResult.error) throw userResult.error;
+      if (boostUsageResult.error) throw boostUsageResult.error;
       if (productResult.error) throw productResult.error;
 
       const normalizedPlan = normalizePlanType(userResult.data?.user_type);
       setUserPlanType(normalizedPlan);
+      setMonthlyBoostsUsed(boostUsageResult.count || 0);
 
       const allProducts = productResult.data || [];
+      const productIds = allProducts.map((item) => item.id).filter(Boolean);
 
-      const expiredIds = allProducts
+      let viewsByProductId = new Map<string, number>();
+      let chatsByProductId = new Map<string, number>();
+
+      if (productIds.length > 0) {
+        const [viewsResult, conversationsResult] = await Promise.all([
+          authSupabase
+            .from("analytics_views")
+            .select("product_id")
+            .in("product_id", productIds),
+          authSupabase
+            .from("conversations")
+            .select("id, product_id")
+            .in("product_id", productIds),
+        ]);
+
+        if (viewsResult.error) throw viewsResult.error;
+        if (conversationsResult.error) throw conversationsResult.error;
+
+        viewsByProductId = (viewsResult.data || []).reduce(
+          (map, row) => {
+            if (!row.product_id) return map;
+            map.set(row.product_id, (map.get(row.product_id) || 0) + 1);
+            return map;
+          },
+          new Map<string, number>(),
+        );
+
+        chatsByProductId = (conversationsResult.data || []).reduce(
+          (map, row) => {
+            if (!row.product_id) return map;
+            map.set(row.product_id, (map.get(row.product_id) || 0) + 1);
+            return map;
+          },
+          new Map<string, number>(),
+        );
+      }
+
+      const enrichedProducts = allProducts.map((item) => ({
+        ...item,
+        _chatCount: chatsByProductId.get(item.id) || 0,
+        _viewCount: viewsByProductId.get(item.id) || 0,
+      }));
+
+      const expiredIds = enrichedProducts
         .filter((item) => {
           const effectiveStatus = getEffectiveListingStatus(item.status, {
             createdAt: item.created_at,
@@ -100,11 +193,11 @@ export default function MyListingsScreen() {
           .in("id", expiredIds);
 
         if (expireError) {
-          console.error("Error syncing expired products:", expireError);
+          console.warn("Listing expiry sync warning:", expireError);
         }
       }
 
-      const activeCount = allProducts.filter((item) => {
+      const activeCount = enrichedProducts.filter((item) => {
         const effectiveStatus = getEffectiveListingStatus(item.status, {
           createdAt: item.created_at,
           metadata: item.metadata as Record<string, any> | null,
@@ -115,7 +208,7 @@ export default function MyListingsScreen() {
       setActiveListingCount(activeCount);
 
       const requestedStatus = String(status || "active").toLowerCase();
-      const filtered = allProducts.filter((item) => {
+      const filtered = enrichedProducts.filter((item) => {
         const effectiveStatus = getEffectiveListingStatus(item.status, {
           createdAt: item.created_at,
           metadata: item.metadata as Record<string, any> | null,
@@ -126,7 +219,8 @@ export default function MyListingsScreen() {
 
       setProducts(filtered);
     } catch (error) {
-      console.error("Error fetching my products:", error);
+      console.warn("Listings fetch warning:", error);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -166,7 +260,11 @@ export default function MyListingsScreen() {
         }
       }
 
-      const token = await getAuthToken(getToken, "listing status update");
+      const token = await getAuthToken(
+        getToken,
+        "listing status update",
+        LISTINGS_AUTH_OPTIONS,
+      );
       const authSupabase = createClerkSupabaseClient(token);
 
       const updatePayload: Record<string, any> = { status: newStatus };
@@ -186,7 +284,7 @@ export default function MyListingsScreen() {
       if (error) throw error;
       fetchMyProducts();
     } catch (err) {
-      console.error("Error updating status:", err);
+      console.warn("Listing status update warning:", err);
       Alert.alert(
         "Update failed",
         err instanceof Error
@@ -207,7 +305,11 @@ export default function MyListingsScreen() {
           text: t("common.delete") || "Delete",
           style: "destructive",
           onPress: async () => {
-            const token = await getAuthToken(getToken, "listing delete");
+            const token = await getAuthToken(
+              getToken,
+              "listing delete",
+              LISTINGS_AUTH_OPTIONS,
+            );
             const authSupabase = createClerkSupabaseClient(token);
             const { error } = await authSupabase
               .from("products")
@@ -218,6 +320,85 @@ export default function MyListingsScreen() {
         },
       ],
     );
+  };
+
+  const promptUpgradeForBoost = () => {
+    setBoostUpgradePromptVisible(true);
+  };
+
+  const formatBoostTimestamp = (iso?: string | null) => {
+    if (!iso) return null;
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return `Boosted ${formatTimeAgo(iso, t)}`;
+  };
+
+  const handleBoost = async (item: any) => {
+    const entitlements = getEntitlements({ fallbackUserType: userPlanType });
+    const hasUnlimitedBoosts = entitlements.monthlyBoosts >= 9999;
+
+    if (entitlements.monthlyBoosts <= 0) {
+      promptUpgradeForBoost();
+      return;
+    }
+
+    if (!hasUnlimitedBoosts && monthlyBoostsUsed >= entitlements.monthlyBoosts) {
+      promptUpgradeForBoost();
+      return;
+    }
+
+    setBoostPrompt({
+      description: item.metadata?.last_boosted_at
+        ? "This will use another boost from your monthly allowance and refresh the listing promotion timestamp."
+        : "This will use one boost from your monthly allowance and promote this active listing.",
+      productId: item.id,
+      title: item.metadata?.last_boosted_at
+        ? "Boost listing again?"
+        : "Boost listing?",
+      visible: true,
+    });
+  };
+
+  const confirmBoost = async () => {
+    if (!boostPrompt.productId) return;
+
+    try {
+      const result = await boostProduct(boostPrompt.productId);
+      setBoostPrompt((current) => ({ ...current, visible: false }));
+      await fetchMyProducts();
+      setBoostSuccessPrompt({
+        description:
+          result.monthly_boost_limit >= 9999
+            ? "Your listing was boosted successfully."
+            : `Your listing was boosted successfully. ${result.monthly_boosts_remaining} boost${result.monthly_boosts_remaining === 1 ? "" : "s"} remaining this month.`,
+        title: "Listing boosted",
+        tone: "success",
+        visible: true,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to boost this listing.";
+
+      setBoostPrompt((current) => ({ ...current, visible: false }));
+
+      if (
+        message.includes("paid plan") ||
+        message.includes("allowance") ||
+        message.includes("boosts available")
+      ) {
+        promptUpgradeForBoost();
+        return;
+      }
+
+      setBoostSuccessPrompt({
+        description: message,
+        title: "Boost failed",
+        tone: "error",
+        visible: true,
+      });
+    }
   };
 
   const renderActiveItem = (item: any) => (
@@ -251,18 +432,32 @@ export default function MyListingsScreen() {
             })()}
           </ThemedText>
 
+          {item.metadata?.last_boosted_at ? (
+            <View style={styles.boostMetaRow}>
+              <View style={styles.boostBadge}>
+                <RocketLaunchIcon size={12} color="#B42318" weight="fill" />
+                <ThemedText style={styles.boostBadgeText}>
+                  {formatBoostTimestamp(item.metadata?.last_boosted_at)}
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.boostCountText}>
+                {`Boosts: ${Number(item.metadata?.boost_count || 0)}`}
+              </ThemedText>
+            </View>
+          ) : null}
+
           <View style={styles.statsRow}>
             <View style={styles.stat}>
               <EyeIcon size={14} color={themeColors.text} />
-              <ThemedText style={styles.statText}>234</ThemedText>
+              <ThemedText style={styles.statText}>
+                {item._viewCount || 0}
+              </ThemedText>
             </View>
             <View style={styles.stat}>
               <ChatTeardropTextIcon size={14} color={themeColors.text} />
-              <ThemedText style={styles.statText}>8</ThemedText>
-            </View>
-            <View style={styles.stat}>
-              <ArrowsClockwiseIcon size={14} color={themeColors.text} />
-              <ThemedText style={styles.statText}>0</ThemedText>
+              <ThemedText style={styles.statText}>
+                {item._chatCount || 0}
+              </ThemedText>
             </View>
             <ThemedText style={styles.timeAgo}>
               {formatTimeAgo(item.created_at, t)}
@@ -283,10 +478,30 @@ export default function MyListingsScreen() {
             {t("listings_screen.edit")}
           </ThemedText>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <RocketLaunchIcon size={18} color={themeColors.text} />
-          <ThemedText style={styles.actionButtonText}>
-            {t("listings_screen.boost")}
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => handleBoost(item)}
+          disabled={boostingProductId === item.id}
+        >
+          <RocketLaunchIcon
+            size={18}
+            color={
+              boostingProductId === item.id
+                ? themeColors.tabIconDefault
+                : themeColors.text
+            }
+          />
+          <ThemedText
+            style={[
+              styles.actionButtonText,
+              boostingProductId === item.id && styles.actionButtonTextDisabled,
+            ]}
+          >
+            {boostingProductId === item.id
+              ? "Boosting..."
+              : item.metadata?.last_boosted_at
+                ? "Boost again"
+                : t("listings_screen.boost")}
           </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
@@ -352,33 +567,18 @@ export default function MyListingsScreen() {
           <ThemedText style={styles.title} numberOfLines={1}>
             {item.title || t("listings_screen.untitled_draft")}
           </ThemedText>
-
-          <View style={styles.progressContainer}>
-            <View style={styles.progressHeader}>
-              <ThemedText style={styles.progressLabel}>
-                {t("listings_screen.completion")}
-              </ThemedText>
-              <ThemedText style={styles.progressPercent}>65%</ThemedText>
-            </View>
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: "65%" }]} />
-            </View>
-          </View>
-
-          <View style={styles.missingInfoRow}>
-            <WarningCircleIcon size={14} color="#E44336" weight="fill" />
-            <ThemedText style={styles.missingText}>
-              {t("listings_screen.missing_info", {
-                info: "Price, Description",
-              })}
-            </ThemedText>
-          </View>
+          <ThemedText style={styles.soldOn}>
+            Saved as draft
+          </ThemedText>
         </View>
       </View>
 
       <View style={styles.actionsRow}>
         <TouchableOpacity
-          style={[styles.draftActionBtn, { backgroundColor: "#3B82F6" }]}
+          style={[
+            styles.draftActionBtn,
+            { backgroundColor: themeColors.primary },
+          ]}
           onPress={() => router.push(`/sell/details?editId=${item.id}`)}
         >
           <ThemedText style={styles.draftActionText}>
@@ -386,15 +586,21 @@ export default function MyListingsScreen() {
           </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.draftActionBtn, { backgroundColor: "#E5E7EB" }]}
+          style={[
+            styles.draftActionBtn,
+            styles.draftDeleteBtn,
+            {
+              backgroundColor: themeColors.background,
+              borderColor: themeColors.primary,
+            },
+          ]}
           onPress={() => handleDelete(item.id)}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <TrashIcon size={16} color="#000" weight="fill" />
-            <ThemedText style={[styles.draftActionText, { color: "#000" }]}>
-              {t("common.delete")}
-            </ThemedText>
-          </View>
+          <ThemedText
+            style={[styles.draftActionText, { color: themeColors.primary }]}
+          >
+            {t("common.delete")}
+          </ThemedText>
         </TouchableOpacity>
       </View>
     </View>
@@ -422,18 +628,24 @@ export default function MyListingsScreen() {
             <ThemedText style={styles.title} numberOfLines={1}>
               {item.title}
             </ThemedText>
-            <ThemedText style={styles.soldOn}>Expired on {expiredDateLabel}</ThemedText>
+            <ThemedText style={styles.soldOn}>
+              Expired on {expiredDateLabel}
+            </ThemedText>
 
             <View style={styles.soldPriceRow}>
               <ThemedText style={styles.price}>
                 {formatPrice(item.price, item.metadata?.currency || "USD")}
               </ThemedText>
               <TouchableOpacity
-                style={styles.relistBtn}
+                style={[
+                  styles.expiredRelistBtn,
+                  {
+                    backgroundColor: themeColors.primary,
+                  },
+                ]}
                 onPress={() => handleUpdateStatus(item.id, "active", item)}
               >
-                <ArrowsCounterClockwiseIcon size={16} color="#fff" />
-                <ThemedText style={styles.relistText}>Relist</ThemedText>
+                <ThemedText style={styles.draftActionText}>Relist</ThemedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -451,6 +663,54 @@ export default function MyListingsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+      <UpgradePromptModal
+        visible={boostUpgradePromptVisible}
+        title="Upgrade to boost listings"
+        description={
+          userPlanType === "regular"
+            ? "Boosts are available on Starter, Pro, and Business plans. Upgrade to start promoting your active listings."
+            : "You have used your monthly boost allowance. Upgrade your plan to unlock more listing boosts."
+        }
+        onClose={() => setBoostUpgradePromptVisible(false)}
+        onConfirm={() => {
+          const recommendedPlan =
+            userPlanType === "regular"
+              ? "starter"
+              : userPlanType === "starter"
+                ? "pro"
+                : "business";
+
+          setBoostUpgradePromptVisible(false);
+          router.push({
+            pathname: "/subscription" as any,
+            params: { plan: recommendedPlan },
+          });
+        }}
+      />
+      <ActionStatusModal
+        visible={boostSuccessPrompt.visible}
+        title={boostSuccessPrompt.title}
+        description={boostSuccessPrompt.description}
+        actionLabel="OK"
+        tone={boostSuccessPrompt.tone}
+        onClose={() =>
+          setBoostSuccessPrompt((current) => ({
+            ...current,
+            tone: "success",
+            visible: false,
+          }))
+        }
+      />
+      <BoostListingModal
+        visible={boostPrompt.visible}
+        title={boostPrompt.title}
+        description={boostPrompt.description}
+        isSubmitting={boostingProductId === boostPrompt.productId}
+        onClose={() =>
+          setBoostPrompt((current) => ({ ...current, visible: false }))
+        }
+        onConfirm={confirmBoost}
+      />
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.header}>
@@ -473,6 +733,39 @@ export default function MyListingsScreen() {
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            status === "active" ? (
+              <View
+                style={[styles.summaryCard, { backgroundColor: themeColors.card }]}
+              >
+                <ThemedText style={styles.summaryTitle}>
+                  Boost allowance
+                </ThemedText>
+                <ThemedText style={styles.summaryText}>
+                  {(() => {
+                    const entitlements = getEntitlements({
+                      fallbackUserType: userPlanType,
+                    });
+
+                    if (entitlements.monthlyBoosts <= 0) {
+                      return "Upgrade to Starter or above to unlock listing boosts.";
+                    }
+
+                    if (entitlements.monthlyBoosts >= 9999) {
+                      return "Your Business plan includes unlimited monthly boosts.";
+                    }
+
+                    const remaining = Math.max(
+                      entitlements.monthlyBoosts - monthlyBoostsUsed,
+                      0,
+                    );
+
+                    return `${remaining} of ${entitlements.monthlyBoosts} boosts remaining this month.`;
+                  })()}
+                </ThemedText>
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -507,16 +800,31 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
   },
+  summaryCard: {
+    borderRadius: 14,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  summaryText: {
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.8,
+  },
   card: {
-    borderRadius: 16,
+    borderRadius: 6,
     borderCurve: "continuous",
-    marginBottom: 16,
+    marginBottom: 8,
     padding: 12,
-    elevation: 2,
   },
   cardContent: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
   },
   image: {
     width: 90,
@@ -568,6 +876,31 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginTop: 4,
   },
+  boostMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 6,
+  },
+  boostBadge: {
+    alignItems: "center",
+    backgroundColor: "#FEECE9",
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  boostBadgeText: {
+    color: "#B42318",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  boostCountText: {
+    fontSize: 11,
+    opacity: 0.7,
+  },
   divider: {
     height: 1,
     marginVertical: 6,
@@ -593,6 +926,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
   },
+  actionButtonTextDisabled: {
+    opacity: 0.55,
+  },
   soldPriceRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -613,54 +949,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-  progressContainer: {
-    marginTop: 8,
-  },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  progressLabel: {
-    fontSize: 11,
-    opacity: 0.6,
-  },
-  progressPercent: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  progressBarBg: {
-    height: 6,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: "100%",
-    backgroundColor: "#3B82F6",
-  },
-  missingInfoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 8,
-  },
-  missingText: {
-    fontSize: 11,
-    color: "#E44336",
-  },
   draftActionBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 11,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 12,
   },
+  draftDeleteBtn: {
+    borderWidth: 1,
+  },
+  expiredRelistBtn: {
+    minWidth: 96,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   draftActionText: {
     color: "#fff",
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   center: {
     flex: 1,

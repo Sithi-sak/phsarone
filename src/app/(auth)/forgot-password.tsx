@@ -166,7 +166,7 @@ export default function ForgotPasswordPage() {
           [
             {
               text: "OK",
-              onPress: () => router.replace("/(tabs)"),
+              onPress: () => router.replace("/"),
             },
           ],
         );

@@ -172,7 +172,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderCurve: "continuous",
     borderWidth: 1,
-    elevation: 1,
   },
   listItemLeft: {
     flexDirection: "row",

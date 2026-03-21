@@ -1,5 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useStripe } from "@stripe/stripe-react-native";
+import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import PricingCard, {
   PricingPlan,
@@ -12,7 +13,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { CaretLeftIcon } from "phosphor-react-native";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, StyleSheet, TouchableOpacity, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type CreateIntentResponse = {
@@ -26,7 +27,10 @@ type ConfirmPaymentResponse = {
 };
 
 const VALID_PLAN_IDS = new Set(["starter", "pro", "business"]);
-const PAYMENT_STEP_TIMEOUT_MS = 20000;
+const PAYMENT_NETWORK_TIMEOUT_MS = 20000;
+const PAYMENT_SHEET_INIT_TIMEOUT_MS = 30000;
+const AUTH_TIMEOUT_MS = 30000;
+const AUTH_RETRIES = 1;
 
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -60,6 +64,17 @@ export default function SubscriptionPage() {
 
   const [selectedPlanId, setSelectedPlanId] = useState("starter");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [checkoutStatusPrompt, setCheckoutStatusPrompt] = useState<{
+    description: string;
+    title: string;
+    tone: "error" | "info" | "success";
+    visible: boolean;
+  }>({
+    description: "",
+    title: "",
+    tone: "success",
+    visible: false,
+  });
 
   useEffect(() => {
     const incoming = Array.isArray(plan) ? plan[0] : plan;
@@ -114,7 +129,12 @@ export default function SubscriptionPage() {
     if (isProcessingPayment) return;
 
     if (!userId) {
-      Alert.alert("Sign in required", "Please sign in before purchasing a plan.");
+      setCheckoutStatusPrompt({
+        description: "Please sign in before purchasing a plan.",
+        title: "Sign in required",
+        tone: "info",
+        visible: true,
+      });
       return;
     }
 
@@ -123,7 +143,10 @@ export default function SubscriptionPage() {
     try {
       console.log("[Subscription] Starting checkout for plan:", selectedPlanId);
       console.log("[Subscription] Getting Clerk token");
-      const token = await getAuthToken(getToken, "subscription checkout");
+      const token = await getAuthToken(getToken, "subscription checkout", {
+        retries: AUTH_RETRIES,
+        timeoutMs: AUTH_TIMEOUT_MS,
+      });
 
       const authSupabase = createClerkSupabaseClient(token);
 
@@ -135,7 +158,7 @@ export default function SubscriptionPage() {
               planId: selectedPlanId,
             },
           }),
-          PAYMENT_STEP_TIMEOUT_MS,
+          PAYMENT_NETWORK_TIMEOUT_MS,
           "Payment setup",
         );
 
@@ -156,7 +179,7 @@ export default function SubscriptionPage() {
           returnURL: Linking.createURL("stripe-redirect"),
           allowsDelayedPaymentMethods: false,
         }),
-        PAYMENT_STEP_TIMEOUT_MS,
+        PAYMENT_SHEET_INIT_TIMEOUT_MS,
         "Payment sheet initialization",
       );
 
@@ -165,11 +188,7 @@ export default function SubscriptionPage() {
       }
 
       console.log("[Subscription] Presenting payment sheet");
-      const { error: presentError } = await withTimeout(
-        presentPaymentSheet(),
-        PAYMENT_STEP_TIMEOUT_MS,
-        "Payment sheet presentation",
-      );
+      const { error: presentError } = await presentPaymentSheet();
 
       if (presentError) {
         if (presentError.code === "Canceled") {
@@ -188,7 +207,7 @@ export default function SubscriptionPage() {
               planId: selectedPlanId,
             },
           }),
-          PAYMENT_STEP_TIMEOUT_MS,
+          PAYMENT_NETWORK_TIMEOUT_MS,
           "Payment confirmation",
         );
 
@@ -201,19 +220,25 @@ export default function SubscriptionPage() {
         throw new Error("Subscription activation failed.");
       }
 
-      Alert.alert(
-        "Subscription updated",
-        "Your plan is active and premium features are now unlocked.",
-      );
+      setCheckoutStatusPrompt({
+        description: "Your plan is active and premium features are now unlocked.",
+        title: "Subscription updated",
+        tone: "success",
+        visible: true,
+      });
       console.log("[Subscription] Checkout completed successfully");
-      router.back();
     } catch (paymentError: unknown) {
       const message =
         paymentError instanceof Error
           ? paymentError.message
           : "Something went wrong while processing payment.";
       console.error("Subscription payment error:", paymentError);
-      Alert.alert("Payment failed", message);
+      setCheckoutStatusPrompt({
+        description: message,
+        title: "Payment failed",
+        tone: "error",
+        visible: true,
+      });
     } finally {
       setIsProcessingPayment(false);
     }
@@ -223,6 +248,23 @@ export default function SubscriptionPage() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: themeColors.background }]}
     >
+      <ActionStatusModal
+        visible={checkoutStatusPrompt.visible}
+        title={checkoutStatusPrompt.title}
+        description={checkoutStatusPrompt.description}
+        tone={checkoutStatusPrompt.tone}
+        actionLabel={checkoutStatusPrompt.tone === "success" ? "Continue" : "OK"}
+        onClose={() => {
+          const shouldGoBack = checkoutStatusPrompt.tone === "success";
+          setCheckoutStatusPrompt((current) => ({
+            ...current,
+            visible: false,
+          }));
+          if (shouldGoBack) {
+            router.back();
+          }
+        }}
+      />
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}

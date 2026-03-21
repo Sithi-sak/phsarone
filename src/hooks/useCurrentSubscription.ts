@@ -79,7 +79,7 @@ export function useCurrentSubscription() {
       setEntitlements(getEntitlements({ subscription: resolved }));
       return resolved;
     } catch (fetchError) {
-      console.error("Error loading current subscription:", fetchError);
+      console.warn("Current subscription fetch warning:", fetchError);
       setSubscription(null);
       setEntitlements(getEntitlements());
       setError(

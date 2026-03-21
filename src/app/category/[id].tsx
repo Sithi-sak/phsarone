@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/clerk-expo";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   CaretLeftIcon,
@@ -27,9 +28,11 @@ import LocationFilterModal from "@src/components/shared_components/LocationFilte
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { CAMBODIA_LOCATIONS } from "@src/constants/CambodiaLocations";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { fetchBlockedUserIds, filterBlockedSellerRows } from "@src/lib/blockedUsers";
 import { supabase } from "@src/lib/supabase";
 import { Product } from "@src/types/productTypes";
 import { mapDatabaseProductToProduct } from "@src/utils/productUtils";
+import { sortPriorityRankedProducts } from "@src/utils/priorityRanking";
 
 interface Category {
   id: string;
@@ -59,6 +62,7 @@ export default function CategorySearchScreen() {
     title: string;
   }>();
   const router = useRouter();
+  const { userId, getToken } = useAuth();
   const themeColors = useThemeColor();
   const { t, i18n } = useTranslation();
 
@@ -103,7 +107,7 @@ export default function CategorySearchScreen() {
       if (error) throw error;
       setSubCategories(data || []);
     } catch (err) {
-      console.error(err);
+      console.warn("Category subcategory fetch warning:", err);
     }
   }, [mainCategoryId]);
 
@@ -112,6 +116,10 @@ export default function CategorySearchScreen() {
       if (!mainCategoryId) return;
       try {
         if (!isRefreshing) setLoading(true);
+        const blockedSellerIds =
+          userId && getToken
+            ? await fetchBlockedUserIds(getToken, "blocked sellers category feed")
+            : [];
         let query = supabase
           .from("products")
           .select("*, seller:users(*)")
@@ -143,7 +151,14 @@ export default function CategorySearchScreen() {
         });
         if (error) throw error;
 
-        let mapped = ((data as any[]) || []).map(mapDatabaseProductToProduct);
+        const rankedRows =
+          sortBy === "none"
+            ? sortPriorityRankedProducts(
+                filterBlockedSellerRows(((data as any[]) || []), blockedSellerIds),
+              )
+            : filterBlockedSellerRows(((data as any[]) || []), blockedSellerIds);
+
+        let mapped = rankedRows.map(mapDatabaseProductToProduct);
 
         if (selectedCondition)
           mapped = mapped.filter((p) => {
@@ -162,7 +177,7 @@ export default function CategorySearchScreen() {
 
         setProducts(mapped);
       } catch (err) {
-        console.error(err);
+        console.warn("Category products fetch warning:", err);
       } finally {
         setLoading(false);
       }
@@ -176,6 +191,7 @@ export default function CategorySearchScreen() {
       selectedCommune,
       sortBy,
       selectedCondition,
+      userId,
     ],
   );
 

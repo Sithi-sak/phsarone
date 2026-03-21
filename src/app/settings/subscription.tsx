@@ -9,6 +9,7 @@ import { ActivityIndicator, Alert, StyleSheet, TouchableOpacity, View } from "re
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CaretLeftIcon } from "phosphor-react-native";
 import React, { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 type PlanId = "starter" | "pro" | "business";
 
@@ -44,6 +45,7 @@ export default function SubscriptionSettingsScreen() {
   const router = useRouter();
   const themeColors = useThemeColor();
   const { getToken } = useAuth();
+  const { t } = useTranslation();
   const { subscription, entitlements, loading, refresh } =
     useCurrentSubscription();
   const [isCanceling, setIsCanceling] = useState(false);
@@ -60,9 +62,9 @@ export default function SubscriptionSettingsScreen() {
     const end = new Date(subscription.current_period_end).getTime();
     if (Number.isNaN(end)) return "-";
     const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) return "Expired";
-    return `${diffDays} day${diffDays === 1 ? "" : "s"} left`;
-  }, [subscription?.current_period_end]);
+    if (diffDays < 0) return t("subscription_settings.expired");
+    return t("subscription_settings.days_left", { count: diffDays });
+  }, [subscription?.current_period_end, t]);
 
   const currentPlanId = entitlements.planType;
   const isActive = entitlements.isSubscriptionActive;
@@ -75,10 +77,10 @@ export default function SubscriptionSettingsScreen() {
   }, [currentPlanId]);
 
   const ctaLabel = useMemo(() => {
-    if (!subscription || !isActive) return "Choose Plan";
-    if (currentPlanId === "business") return "Manage Plan";
-    return "Upgrade Plan";
-  }, [currentPlanId, isActive, subscription]);
+    if (!subscription || !isActive) return t("subscription_settings.choose_plan");
+    if (currentPlanId === "business") return t("subscription_settings.manage_plan");
+    return t("subscription_settings.upgrade_plan");
+  }, [currentPlanId, isActive, subscription, t]);
 
   const canCancel = useMemo(() => {
     return (
@@ -95,12 +97,12 @@ export default function SubscriptionSettingsScreen() {
     if (!subscription?.id || isCanceling) return;
 
     Alert.alert(
-      "Cancel subscription?",
-      "Your plan will remain active until the current billing period ends.",
+      t("subscription_settings.cancel_title"),
+      t("subscription_settings.cancel_description"),
       [
-        { text: "Keep Plan", style: "cancel" },
+        { text: t("subscription_settings.keep_plan"), style: "cancel" },
         {
-          text: "Cancel Subscription",
+          text: t("subscription_settings.cancel_subscription"),
           style: "destructive",
           onPress: async () => {
             try {
@@ -119,16 +121,16 @@ export default function SubscriptionSettingsScreen() {
 
               await refresh();
               Alert.alert(
-                "Subscription canceled",
-                "Your plan benefits remain available until the current period ends.",
+                t("subscription_settings.canceled_title"),
+                t("subscription_settings.canceled_description"),
               );
             } catch (cancelError) {
               console.error("Error canceling subscription:", cancelError);
               Alert.alert(
-                "Cancellation failed",
+                t("subscription_settings.cancellation_failed"),
                 cancelError instanceof Error
                   ? cancelError.message
-                  : "Unable to cancel subscription.",
+                  : t("subscription_settings.unable_to_cancel"),
               );
             } finally {
               setIsCanceling(false);
@@ -137,7 +139,7 @@ export default function SubscriptionSettingsScreen() {
         },
       ],
     );
-  }, [getToken, isCanceling, refresh, subscription?.id]);
+  }, [getToken, isCanceling, refresh, subscription?.id, t]);
 
   const Row = ({ label, value }: { label: string; value: string }) => (
     <View style={styles.row}>
@@ -154,7 +156,7 @@ export default function SubscriptionSettingsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <CaretLeftIcon size={24} color={themeColors.text} weight="bold" />
         </TouchableOpacity>
-        <ThemedText style={styles.headerTitle}>Subscription</ThemedText>
+        <ThemedText style={styles.headerTitle}>{t("subscription_settings.title")}</ThemedText>
         <View style={{ width: 40 }} />
       </View>
 
@@ -163,28 +165,38 @@ export default function SubscriptionSettingsScreen() {
           {loading ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator color={themeColors.primary} />
-              <ThemedText style={styles.loadingText}>Loading subscription...</ThemedText>
+              <ThemedText style={styles.loadingText}>
+                {t("subscription_settings.loading")}
+              </ThemedText>
             </View>
           ) : subscription ? (
             <>
-              <Row label="Current plan" value={`${formatPlan(subscription.plan_type)} Plan`} />
+              <Row
+                label={t("subscription_settings.current_plan")}
+                value={`${formatPlan(subscription.plan_type)} ${t("subscription_settings.plan_suffix")}`}
+              />
               <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
-              <Row label="Status" value={formatStatus(subscription.status)} />
-              <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
-              <Row label="Valid until" value={formatDate(subscription.current_period_end)} />
-              <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
-              <Row label="Duration" value={durationLabel} />
+              <Row label={t("subscription_settings.status")} value={formatStatus(subscription.status)} />
               <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
               <Row
-                label="Payment provider"
+                label={t("subscription_settings.valid_until")}
+                value={formatDate(subscription.current_period_end)}
+              />
+              <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
+              <Row label={t("subscription_settings.duration")} value={durationLabel} />
+              <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
+              <Row
+                label={t("subscription_settings.payment_provider")}
                 value={String(subscription.payment_provider || "-").toUpperCase()}
               />
             </>
           ) : (
             <View style={styles.emptyWrap}>
-              <ThemedText style={styles.emptyTitle}>No subscription found</ThemedText>
+              <ThemedText style={styles.emptyTitle}>
+                {t("subscription_settings.no_subscription")}
+              </ThemedText>
               <ThemedText style={styles.emptySubtitle}>
-                Subscribe to unlock higher-tier features.
+                {t("subscription_settings.no_subscription_description")}
               </ThemedText>
             </View>
           )}
@@ -211,7 +223,9 @@ export default function SubscriptionSettingsScreen() {
             disabled={isCanceling}
           >
             <ThemedText style={styles.secondaryButtonText}>
-              {isCanceling ? "Canceling..." : "Cancel Subscription"}
+              {isCanceling
+                ? t("subscription_settings.canceling")
+                : t("subscription_settings.cancel_subscription")}
             </ThemedText>
           </TouchableOpacity>
         ) : null}

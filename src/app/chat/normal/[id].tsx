@@ -27,6 +27,7 @@ import {
   Animated,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Keyboard,
   Linking,
   Platform,
@@ -46,6 +47,7 @@ import ImageViewerModal from "@src/components/chat_components/ImageViewerModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { Message, useChat } from "@src/hooks/useChat";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { normalizeImageForUpload } from "@src/utils/imageUpload";
 import { getOptimizedStorageImageUrl } from "@src/utils/storageImage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -285,7 +287,12 @@ function Bubble({
   const { t } = useTranslation();
   const content = parseContent(item.content);
   // ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary
-  const bubbleBg = isMe ? themeColors.primary : themeColors.card;
+  const bubbleBg =
+    content.type === "image"
+      ? "transparent"
+      : isMe
+        ? themeColors.primary
+        : themeColors.card;
   const textColor = isMe ? "#fff" : themeColors.text;
 
   const inner = () => {
@@ -831,9 +838,12 @@ export default function NormalProductChatScreen() {
     const asset = result.assets[0];
     setIsSending(true);
     try {
-      const ext = (asset.uri.split(".").pop() || "jpg").toLowerCase();
-      const path = `chat/${conversation?.id || "unknown"}/${Date.now()}.${ext}`;
-      const url = await uploadFile(asset.uri, path, `image/${ext}`);
+      const normalizedUri = await normalizeImageForUpload(asset.uri, {
+        maxDimension: 1400,
+        compress: 0.72,
+      });
+      const path = `chat/${conversation?.id || "unknown"}/${Date.now()}.jpg`;
+      const url = await uploadFile(normalizedUri, path, "image/jpeg");
       await sendMessage({ type: "image", url });
     } catch (e: any) {
       Alert.alert(t("error"), t("chat.upload_image_failed"));
@@ -1336,11 +1346,10 @@ export default function NormalProductChatScreen() {
           )
         }
       />
-      <View
-        style={{
-          flex: 1,
-          paddingBottom: Platform.OS === "ios" ? keyboardHeight : 0,
-        }}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1, paddingBottom: Platform.OS === "ios" ? keyboardHeight : 0 }}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         {/* ── Messages ────────────────────────────────────────────────────── */}
         <FlatList
@@ -1403,299 +1412,319 @@ export default function NormalProductChatScreen() {
           }}
         />
 
-        {/* ── Recording bar ───────────────────────────────────────────────── */}
-        {isRecording && (
-          <View
-            style={[
-              styles.recordBar,
-              {
-                backgroundColor: themeColors.card,
-                borderTopColor: themeColors.border + "30",
-                paddingBottom: insets.bottom > 0 ? insets.bottom : 14,
-              },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={cancelRecording}
-              style={styles.recordCancel}
-            >
-              <XIcon size={20} color={themeColors.error} weight="bold" />
-            </TouchableOpacity>
-            <Animated.View
-              style={[styles.recordDot, { transform: [{ scale: pulseAnim }] }]}
-            />
-            <ThemedText
-              style={{
-                flex: 1,
-                fontWeight: "600",
-                color: themeColors.text,
-                fontSize: 16,
-              }}
-            >
-              {formatDuration(recordingDuration)}
-            </ThemedText>
-            <ThemedText
-              style={{
-                color: themeColors.text + "55",
-                fontSize: 12,
-                marginRight: 10,
-              }}
-            >
-              {t("chat.tap_to_send")}
-            </ThemedText>
-            <TouchableOpacity
-              onPress={stopAndSend}
+        <View style={{ backgroundColor: themeColors.background }}>
+          {isRecording && (
+            <View
               style={[
-                styles.recordSend,
-                { backgroundColor: themeColors.primary },
-              ]}
-            >
-              <PaperPlaneTiltIcon size={18} color="#fff" weight="fill" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── Location preview ────────────────────────────────────────────── */}
-        {pendingLocation && !isRecording && (
-          <View
-            style={[
-              styles.locationPreviewWrap,
-              {
-                backgroundColor: themeColors.card,
-                borderTopColor: themeColors.border + "30",
-                paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
-              },
-            ]}
-          >
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={styles.locationPreviewCard}
-              onPress={() =>
-                openLocationInMaps(
-                  pendingLocation.latitude,
-                  pendingLocation.longitude,
-                  pendingLocation.label,
-                )
-              }
-            >
-              {!previewMapFailed && (
-                <Image
-                  source={{
-                    uri:
-                      `https://staticmap.openstreetmap.de/staticmap.php?center=${pendingLocation.latitude},${pendingLocation.longitude}` +
-                      `&zoom=16&size=600x220&markers=${pendingLocation.latitude},${pendingLocation.longitude},red-pushpin`,
-                  }}
-                  style={styles.locationPreviewMap}
-                  resizeMode="cover"
-                  onError={() => setPreviewMapFailed(true)}
-                />
-              )}
-              <View
-                style={[
-                  styles.locationPreviewBadge,
-                  { backgroundColor: themeColors.background + "E6" },
-                ]}
-              >
-                <ThemedText
-                  style={{
-                    color: themeColors.text,
-                    fontSize: 12,
-                    fontWeight: "600",
-                  }}
-                  numberOfLines={1}
-                >
-                  {pendingLocation.label || t("chat.shared_location")}
-                </ThemedText>
-                <ThemedText
-                  style={{ color: themeColors.text + "AA", fontSize: 11 }}
-                >
-                  {pendingLocation.latitude.toFixed(6)},{" "}
-                  {pendingLocation.longitude.toFixed(6)}
-                </ThemedText>
-              </View>
-            </TouchableOpacity>
-            <View style={styles.locationPreviewActions}>
-              <TouchableOpacity
-                onPress={() => setPendingLocation(null)}
-                disabled={isPreparingLocation || isSending}
-                style={[
-                  styles.locationPreviewBtn,
-                  {
-                    backgroundColor: themeColors.background,
-                    borderColor: themeColors.border,
-                  },
-                ]}
-              >
-                <ThemedText
-                  style={{ color: themeColors.text, fontWeight: "600" }}
-                >
-                  {t("common.cancel")}
-                </ThemedText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleRetrackPendingLocation}
-                disabled={isPreparingLocation || isSending}
-                style={[
-                  styles.locationPreviewBtn,
-                  {
-                    backgroundColor: themeColors.card,
-                    borderColor: themeColors.border,
-                  },
-                ]}
-              >
-                {isPreparingLocation ? (
-                  <ActivityIndicator size="small" color={themeColors.text} />
-                ) : (
-                  <ThemedText
-                    style={{
-                      color: themeColors.text,
-                      fontWeight: "700",
-                    }}
-                  >
-                    {t("chat.retrack")}
-                  </ThemedText>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleConfirmSendLocation}
-                disabled={isSending || isPreparingLocation}
-                style={[
-                  styles.locationPreviewBtn,
-                  { backgroundColor: themeColors.primary },
-                ]}
-              >
-                {isSending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <ThemedText style={{ color: "#fff", fontWeight: "700" }}>
-                    {t("chat.send") || "Send"}
-                  </ThemedText>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* ── Attach menu ─────────────────────────────────────────────────── */}
-        {showAttachMenu && !isRecording && !pendingLocation && (
-          <View
-            style={[
-              styles.attachMenu,
-              {
-                backgroundColor: themeColors.card,
-                borderTopColor: themeColors.border + "30",
-                paddingBottom: insets.bottom > 0 ? insets.bottom + 4 : 18,
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.attachItem}
-              onPress={handlePickImage}
-            >
-              <View style={[styles.attachIcon, { backgroundColor: "#6366F1" }]}>
-                <ImageIcon size={22} color="#fff" weight="fill" />
-              </View>
-              <ThemedText
-                style={[styles.attachLabel, { color: themeColors.text }]}
-              >
-                {t("chat.photo")}
-              </ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.attachItem}
-              onPress={handleSendLocation}
-            >
-              <View style={[styles.attachIcon, { backgroundColor: "#10B981" }]}>
-                <MapPinIcon size={22} color="#fff" weight="fill" />
-              </View>
-              <ThemedText
-                style={[styles.attachLabel, { color: themeColors.text }]}
-              >
-                {t("chat.location")}
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── Input bar ───────────────────────────────────────────────────── */}
-        {!isRecording && (
-          <View
-            style={[
-              styles.inputBar,
-              {
-                backgroundColor: themeColors.background,
-                borderTopColor: themeColors.border + "30",
-                paddingBottom: 20,
-              },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={() => setShowAttachMenu((v) => !v)}
-              style={[
-                styles.roundBtn,
+                styles.recordBar,
                 {
-                  backgroundColor: showAttachMenu
-                    ? themeColors.primary
-                    : themeColors.card,
+                  backgroundColor: themeColors.card,
+                  borderTopColor: themeColors.border + "30",
+                  paddingBottom:
+                    Platform.OS === "ios"
+                      ? insets.bottom > 0
+                        ? insets.bottom
+                        : 14
+                      : 12,
                 },
               ]}
             >
-              <PlusIcon
-                size={22}
-                color={showAttachMenu ? "#fff" : themeColors.text}
-                weight="bold"
-              />
-            </TouchableOpacity>
-
-            <View
-              style={[styles.inputWrap, { backgroundColor: themeColors.card }]}
-            >
-              <TextInput
-                style={[styles.textInput, { color: themeColors.text }]}
-                placeholder={t("chat.type_a_message")}
-                placeholderTextColor={themeColors.text + "40"}
-                value={inputText}
-                onChangeText={(v) => {
-                  setInputText(v);
-                  if (showAttachMenu) setShowAttachMenu(false);
-                }}
-                multiline
-                maxLength={2000}
-                scrollEnabled={false}
-              />
-            </View>
-
-            {inputText.trim().length > 0 ? (
               <TouchableOpacity
-                onPress={handleSendText}
-                disabled={isSending}
+                onPress={cancelRecording}
+                style={styles.recordCancel}
+              >
+                <XIcon size={20} color={themeColors.error} weight="bold" />
+              </TouchableOpacity>
+              <Animated.View
+                style={[styles.recordDot, { transform: [{ scale: pulseAnim }] }]}
+              />
+              <ThemedText
+                style={{
+                  flex: 1,
+                  fontWeight: "600",
+                  color: themeColors.text,
+                  fontSize: 16,
+                }}
+              >
+                {formatDuration(recordingDuration)}
+              </ThemedText>
+              <ThemedText
+                style={{
+                  color: themeColors.text + "55",
+                  fontSize: 12,
+                  marginRight: 10,
+                }}
+              >
+                {t("chat.tap_to_send")}
+              </ThemedText>
+              <TouchableOpacity
+                onPress={stopAndSend}
                 style={[
-                  styles.roundBtn,
+                  styles.recordSend,
                   { backgroundColor: themeColors.primary },
                 ]}
               >
-                {isSending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <PaperPlaneTiltIcon size={20} color="#fff" weight="fill" />
-                )}
+                <PaperPlaneTiltIcon size={18} color="#fff" weight="fill" />
               </TouchableOpacity>
-            ) : (
+            </View>
+          )}
+
+          {pendingLocation && !isRecording && (
+            <View
+              style={[
+                styles.locationPreviewWrap,
+                {
+                  backgroundColor: themeColors.card,
+                  borderTopColor: themeColors.border + "30",
+                  paddingBottom:
+                    Platform.OS === "ios"
+                      ? insets.bottom > 0
+                        ? insets.bottom
+                        : 10
+                      : 10,
+                },
+              ]}
+            >
               <TouchableOpacity
-                onPressIn={startRecording}
-                onPressOut={stopAndSend}
-                style={[styles.roundBtn, { backgroundColor: themeColors.card }]}
+                activeOpacity={0.9}
+                style={styles.locationPreviewCard}
+                onPress={() =>
+                  openLocationInMaps(
+                    pendingLocation.latitude,
+                    pendingLocation.longitude,
+                    pendingLocation.label,
+                  )
+                }
               >
-                <MicrophoneIcon
+                {!previewMapFailed && (
+                  <Image
+                    source={{
+                      uri:
+                        `https://staticmap.openstreetmap.de/staticmap.php?center=${pendingLocation.latitude},${pendingLocation.longitude}` +
+                        `&zoom=16&size=600x220&markers=${pendingLocation.latitude},${pendingLocation.longitude},red-pushpin`,
+                    }}
+                    style={styles.locationPreviewMap}
+                    resizeMode="cover"
+                    onError={() => setPreviewMapFailed(true)}
+                  />
+                )}
+                <View
+                  style={[
+                    styles.locationPreviewBadge,
+                    { backgroundColor: themeColors.background + "E6" },
+                  ]}
+                >
+                  <ThemedText
+                    style={{
+                      color: themeColors.text,
+                      fontSize: 12,
+                      fontWeight: "600",
+                    }}
+                    numberOfLines={1}
+                  >
+                    {pendingLocation.label || t("chat.shared_location")}
+                  </ThemedText>
+                  <ThemedText
+                    style={{ color: themeColors.text + "AA", fontSize: 11 }}
+                  >
+                    {pendingLocation.latitude.toFixed(6)},{" "}
+                    {pendingLocation.longitude.toFixed(6)}
+                  </ThemedText>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.locationPreviewActions}>
+                <TouchableOpacity
+                  onPress={() => setPendingLocation(null)}
+                  disabled={isPreparingLocation || isSending}
+                  style={[
+                    styles.locationPreviewBtn,
+                    {
+                      backgroundColor: themeColors.background,
+                      borderColor: themeColors.border,
+                    },
+                  ]}
+                >
+                  <ThemedText
+                    style={{ color: themeColors.text, fontWeight: "600" }}
+                  >
+                    {t("common.cancel")}
+                  </ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleRetrackPendingLocation}
+                  disabled={isPreparingLocation || isSending}
+                  style={[
+                    styles.locationPreviewBtn,
+                    {
+                      backgroundColor: themeColors.card,
+                      borderColor: themeColors.border,
+                    },
+                  ]}
+                >
+                  {isPreparingLocation ? (
+                    <ActivityIndicator size="small" color={themeColors.text} />
+                  ) : (
+                    <ThemedText
+                      style={{
+                        color: themeColors.text,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {t("chat.retrack")}
+                    </ThemedText>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleConfirmSendLocation}
+                  disabled={isSending || isPreparingLocation}
+                  style={[
+                    styles.locationPreviewBtn,
+                    { backgroundColor: themeColors.primary },
+                  ]}
+                >
+                  {isSending ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <ThemedText style={{ color: "#fff", fontWeight: "700" }}>
+                      {t("chat.send") || "Send"}
+                    </ThemedText>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {showAttachMenu && !isRecording && !pendingLocation && (
+            <View
+              style={[
+                styles.attachMenu,
+                {
+                  backgroundColor: themeColors.card,
+                  borderTopColor: themeColors.border + "30",
+                  paddingBottom:
+                    Platform.OS === "ios"
+                      ? insets.bottom > 0
+                        ? insets.bottom + 4
+                        : 18
+                      : 12,
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.attachItem}
+                onPress={handlePickImage}
+              >
+                <View style={[styles.attachIcon, { backgroundColor: "#6366F1" }]}>
+                  <ImageIcon size={22} color="#fff" weight="fill" />
+                </View>
+                <ThemedText
+                  style={[styles.attachLabel, { color: themeColors.text }]}
+                >
+                  {t("chat.photo")}
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.attachItem}
+                onPress={handleSendLocation}
+              >
+                <View style={[styles.attachIcon, { backgroundColor: "#10B981" }]}>
+                  <MapPinIcon size={22} color="#fff" weight="fill" />
+                </View>
+                <ThemedText
+                  style={[styles.attachLabel, { color: themeColors.text }]}
+                >
+                  {t("chat.location")}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!isRecording && (
+            <View
+              style={[
+                styles.inputBar,
+                {
+                  backgroundColor: themeColors.background,
+                  borderTopColor: themeColors.border + "30",
+                  paddingBottom:
+                    Platform.OS === "ios"
+                      ? keyboardHeight > 0
+                        ? 0
+                        : insets.bottom > 0
+                          ? insets.bottom + 4
+                          : 12
+                      : 0,
+                },
+              ]}
+            >
+              <TouchableOpacity
+                onPress={() => setShowAttachMenu((v) => !v)}
+                style={[
+                  styles.roundBtn,
+                  {
+                    backgroundColor: showAttachMenu
+                      ? themeColors.primary
+                      : themeColors.card,
+                  },
+                ]}
+              >
+                <PlusIcon
                   size={22}
-                  color={isRecording ? themeColors.primary : themeColors.text}
-                  weight="fill"
+                  color={showAttachMenu ? "#fff" : themeColors.text}
+                  weight="bold"
                 />
               </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
+
+              <View
+                style={[styles.inputWrap, { backgroundColor: themeColors.card }]}
+              >
+                <TextInput
+                  style={[styles.textInput, { color: themeColors.text }]}
+                  placeholder={t("chat.type_a_message")}
+                  placeholderTextColor={themeColors.text + "40"}
+                  value={inputText}
+                  onChangeText={(v) => {
+                    setInputText(v);
+                    if (showAttachMenu) setShowAttachMenu(false);
+                  }}
+                  multiline
+                  maxLength={2000}
+                  scrollEnabled={false}
+                />
+              </View>
+
+              {inputText.trim().length > 0 ? (
+                <TouchableOpacity
+                  onPress={handleSendText}
+                  disabled={isSending}
+                  style={[
+                    styles.roundBtn,
+                    { backgroundColor: themeColors.primary },
+                  ]}
+                >
+                  {isSending ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <PaperPlaneTiltIcon size={20} color="#fff" weight="fill" />
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPressIn={startRecording}
+                  onPressOut={stopAndSend}
+                  style={[styles.roundBtn, { backgroundColor: themeColors.card }]}
+                >
+                  <MicrophoneIcon
+                    size={22}
+                    color={isRecording ? themeColors.primary : themeColors.text}
+                    weight="fill"
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
 
       <ImageViewerModal
         visible={!!viewingImage}
@@ -1852,7 +1881,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 12,
-    paddingTop: 10,
+    paddingTop: 6,
     gap: 8,
     borderTopWidth: 1,
   },

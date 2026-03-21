@@ -1,6 +1,7 @@
 import { Colors } from "@src/constants/Colors";
+import { useProfileOnboardingStatus } from "@src/hooks/useProfileOnboardingStatus";
 import useThemeColor from "@src/hooks/useThemeColor";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import {
   ArrowsClockwiseIcon,
   ChatCircleIcon,
@@ -135,12 +136,21 @@ function AnimatedTabLabel({
 }
 
 export default function TabLayout() {
+  const { checked, needsOnboarding } = useProfileOnboardingStatus();
   const themeColors = useThemeColor();
   const { i18n, t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const activeFont =
     i18n.language === "kh" ? "KantumruyPro-Regular" : "Geist";
   const iconSize = { home: 26, trade: 26, sell: 26, chat: 26, profile: 26 };
+
+  if (checked && needsOnboarding) {
+    return <Redirect href="/onboarding/profile" />;
+  }
+
+  if (!checked) {
+    return null;
+  }
 
   return (
     <Tabs

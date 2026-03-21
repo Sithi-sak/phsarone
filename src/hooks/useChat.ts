@@ -13,6 +13,10 @@ const buildNotificationBody = (rawContent: any): string => {
   switch (content.type) {
     case 'image':
       return 'Sent a photo';
+    case 'trade_offer':
+      return content.offeredItemTitle
+        ? `Sent a trade offer: ${content.offeredItemTitle}`
+        : 'Sent a trade offer';
     case 'voice':
       return 'Sent a voice message';
     case 'location':
@@ -39,6 +43,16 @@ const formatErrorMessage = (err: any): string => {
   }
 };
 
+const CHAT_AUTH_OPTIONS = {
+  timeoutMs: 45000,
+  retries: 2,
+} as const;
+
+const REALTIME_AUTH_OPTIONS = {
+  timeoutMs: 30000,
+  retries: 1,
+} as const;
+
 export type Message = Database['public']['Tables']['messages']['Row'] & {
   sender?: Database['public']['Tables']['users']['Row'];
 };
@@ -54,9 +68,27 @@ export type Conversation = Database['public']['Tables']['conversations']['Row'] 
   unread_count?: number;
 };
 
+type ConversationSummaryRow = {
+  id: string;
+  last_message_at: string | null;
+  last_message_content: any;
+  last_message_sender_id: string | null;
+  unread_count: number | null;
+};
+
 type MessageContent =
   | { type: 'text'; text: string }
   | { type: 'image'; url: string }
+  | {
+      type: 'trade_offer';
+      offeredItemId: string;
+      offeredItemTitle: string;
+      offeredItemImage?: string;
+      offeredItemPrice?: string;
+      targetTradeId: string;
+      targetTradeTitle?: string;
+      message?: string;
+    }
   | { type: 'location'; latitude: number; longitude: number; label?: string }
   | { type: 'voice'; url: string; duration?: number };
 
@@ -91,7 +123,11 @@ export function useConversations(type: "regular" | "trade", productId?: string |
     setError(null);
 
     try {
-      const token = await getAuthToken(getToken, "chat conversations load");
+      const token = await getAuthToken(
+        getToken,
+        "chat conversations load",
+        CHAT_AUTH_OPTIONS,
+      );
       const authSupabase = createClerkSupabaseClient(token);
 
       let convQuery = authSupabase
@@ -101,7 +137,9 @@ export function useConversations(type: "regular" | "trade", productId?: string |
 
       if (productId) convQuery = convQuery.eq("product_id", productId);
       if (type === "regular") {
-        convQuery = convQuery.not("product_id", "is", null);
+        convQuery = convQuery
+          .not("product_id", "is", null)
+          .is("trade_id", null);
       } else {
         convQuery = convQuery.not("trade_id", "is", null);
       }
@@ -114,26 +152,45 @@ export function useConversations(type: "regular" | "trade", productId?: string |
       if (filteredConversations.length === 0) { setConversations([]); return; }
 
       const conversationIds = filteredConversations.map(c => c.id);
+      let summaryByConversationId = new Map<string, ConversationSummaryRow>();
 
-      const { data: lastMessages, error: lastError } = await authSupabase
-        .from('messages').select('id, conversations_id, content, created_at, sender_id')
-        .in('conversations_id', conversationIds).order('created_at', { ascending: false });
-      if (lastError) throw lastError;
+      try {
+        const { data: summaries, error: summaryError } = await authSupabase
+          .from('conversation_summaries' as any)
+          .select('id, last_message_content, last_message_at, last_message_sender_id, unread_count')
+          .in('id', conversationIds);
 
-      const { data: unreadData, error: unreadError } = await authSupabase
-        .from('messages').select('conversations_id')
-        .in('conversations_id', conversationIds).eq('is_read', false).neq('sender_id', userId);
-      if (unreadError) throw unreadError;
+        if (summaryError) {
+          console.warn('Conversation summaries fetch warning:', formatErrorMessage(summaryError));
+        } else {
+          summaryByConversationId = new Map(
+            ((summaries as ConversationSummaryRow[] | null) || []).map((summary) => [
+              summary.id,
+              summary,
+            ]),
+          );
+        }
+      } catch (summaryErr: any) {
+        console.warn(
+          'Conversation summaries fallback warning:',
+          formatErrorMessage(summaryErr),
+        );
+      }
 
       const nextConversations = filteredConversations.map((conv: any) => {
-        const lastMsg = (lastMessages || []).find(m => m.conversations_id === conv.id);
+        const summary = summaryByConversationId.get(conv.id);
+        const syntheticLastMessageId =
+          summary?.last_message_at && summary?.last_message_sender_id
+            ? `${conv.id}:${summary.last_message_sender_id}:${summary.last_message_at}`
+            : undefined;
+
         return {
           ...conv,
-          last_message_id: lastMsg?.id,
-          last_message_content: lastMsg?.content,
-          last_message_at: lastMsg?.created_at,
-          last_message_sender_id: lastMsg?.sender_id,
-          unread_count: (unreadData || []).filter(m => m.conversations_id === conv.id).length,
+          last_message_id: syntheticLastMessageId,
+          last_message_content: summary?.last_message_content,
+          last_message_at: summary?.last_message_at || conv.updated_at,
+          last_message_sender_id: summary?.last_message_sender_id,
+          unread_count: summary?.unread_count || 0,
         };
       });
 
@@ -177,8 +234,7 @@ export function useConversations(type: "regular" | "trade", productId?: string |
       });
     } catch (err: any) {
       const message = formatErrorMessage(err);
-      console.error("Error fetching conversations:", err);
-      console.error("Error fetching conversations details:", message);
+      console.warn("Conversation fetch warning:", message);
       setError(message || "Failed to load conversations.");
     } finally {
       if (showLoading) setLoading(false);
@@ -262,27 +318,24 @@ export function useConversations(type: "regular" | "trade", productId?: string |
 
     const setupConversationsRealtime = async () => {
       try {
-        console.log('[Chat] Starting realtime setup for userId:', userId);
-        const token = await getAuthToken(getToken, "chat conversations realtime");
-        console.log('[Chat] Token obtained:', token ? 'YES (length: ' + token.length + ')' : 'NO - THIS IS THE PROBLEM!');
+        const token = await getAuthToken(
+          getToken,
+          "chat conversations realtime",
+          REALTIME_AUTH_OPTIONS,
+        );
         
         if (!token || isCancelled) {
-          console.error('[Chat] Cannot setup realtime: token missing or cancelled');
+          console.warn('[Chat] Realtime skipped: token missing or setup cancelled.');
           return;
         }
 
-        // Ensure auth is set before creating/subscribing to channels
         supabase.realtime.setAuth(token);
-        console.log('[Chat] Realtime auth set successfully');
 
-        // Clean up previous channel if exists
         if (channel) {
-          console.log('[Chat] Removing previous channel');
           supabase.removeChannel(channel);
           channel = null;
         }
 
-        console.log('[Chat] Creating message listener channel...');
         channel = supabase
           .channel(`user_conversations:${userId}:${type}`)
           .on(
@@ -334,16 +387,13 @@ export function useConversations(type: "regular" | "trade", productId?: string |
             console.log('[Chat] 📡 Realtime system event:', payload);
           })
           .subscribe((status, err) => {
-            console.log('[Chat] 📡 Conversations realtime subscription status:', status);
             if (err) {
-              console.error('[Chat] ❌ Realtime subscription error:', err);
+              console.warn('[Chat] Conversations realtime warning:', formatErrorMessage(err));
             }
             if (status === 'CHANNEL_ERROR') {
-              console.error('[Chat] ❌ CHANNEL_ERROR: Realtime connection failed');
+              console.warn('[Chat] Conversations realtime channel error.');
             }
             if (status === 'CLOSED') {
-              console.warn('[Chat] ⚠️ Channel CLOSED - will try to reconnect in 5s');
-              // Try to reconnect after 5 seconds
               if (!isCancelled) {
                 setTimeout(() => {
                   if (!isCancelled) {
@@ -353,9 +403,11 @@ export function useConversations(type: "regular" | "trade", productId?: string |
               }
             }
           });
-        console.log('[Chat] ✅ Realtime channel created and subscribed');
       } catch (err: any) {
-        console.error('[Chat] ❌ Conversations realtime setup ERROR:', err?.message || err);
+        console.warn(
+          '[Chat] Conversations realtime unavailable; continuing with fetch/polling:',
+          formatErrorMessage(err),
+        );
       }
     };
 
@@ -408,7 +460,11 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
     setError(null);
 
     try {
-      const token = await getAuthToken(getToken, "chat detail load");
+      const token = await getAuthToken(
+        getToken,
+        "chat detail load",
+        CHAT_AUTH_OPTIONS,
+      );
       const authSupabase = createClerkSupabaseClient(token);
       let currentConversation: Conversation | null = null;
 
@@ -533,16 +589,17 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
 
     const setupRealtime = async () => {
       try {
-        // Realtime must use the same auth context as table queries.
-        const token = await getAuthToken(getToken, "chat detail realtime");
+        const token = await getAuthToken(
+          getToken,
+          "chat detail realtime",
+          REALTIME_AUTH_OPTIONS,
+        );
         if (!token || isCancelled) {
-          console.error('[Chat Detail] Cannot setup realtime: token missing or cancelled');
+          console.warn('[Chat Detail] Realtime skipped: token missing or setup cancelled.');
           return;
         }
         
-        // Ensure auth is set before creating/subscribing to channels
         supabase.realtime.setAuth(token);
-        console.log('[Chat Detail] Realtime auth set successfully');
 
         if (subscriptionRef.current) {
           supabase.removeChannel(subscriptionRef.current);
@@ -605,35 +662,14 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
               );
             }
           )
-          .on<Message>(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'messages',
-              filter: `conversations_id=eq.${conversation.id}`,
-            },
-            (payload) => {
-              console.log('[Chat Detail] Message UPDATE received', payload.new);
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === (payload.new as Message).id
-                    ? { ...m, ...(payload.new as Message) }
-                    : m
-                )
-              );
-            }
-          )
           .on('system', { event: '*' }, (payload) => {
             console.log('[Chat Detail] 📡 Realtime system event:', payload);
           })
           .subscribe((status, err) => {
-            console.log('[Chat Detail] Messages realtime subscription status:', status);
             if (err) {
-              console.error('[Chat Detail] ❌ Realtime error:', err);
+              console.warn('[Chat Detail] Realtime warning:', formatErrorMessage(err));
             }
             if (status === 'CLOSED') {
-              console.warn('[Chat Detail] ⚠️ Channel CLOSED - will try to reconnect in 5s');
               if (!isCancelled) {
                 setTimeout(() => {
                   if (!isCancelled) {
@@ -645,9 +681,11 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
           });
 
         subscriptionRef.current = channel;
-        console.log('[Chat Detail] ✅ Messages realtime channel subscribed');
       } catch (err: any) {
-        console.error('[Chat Detail] Realtime setup error:', err);
+        console.warn(
+          '[Chat Detail] Realtime unavailable; continuing with fetch/polling:',
+          formatErrorMessage(err),
+        );
       }
     };
 

@@ -1,8 +1,16 @@
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Modal, Pressable, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Animated,
+  Modal,
+  Pressable,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function ChatOptionsSheet({
   visible,
@@ -16,6 +24,31 @@ export default function ChatOptionsSheet({
   const { t } = useTranslation();
   const hookThemeColors = useThemeColor();
   const themeColors = propsThemeColors || hookThemeColors;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = useRef(new Animated.Value(40)).current;
+
+  useEffect(() => {
+    if (!visible) {
+      backdropOpacity.setValue(0);
+      sheetTranslateY.setValue(40);
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.spring(sheetTranslateY, {
+        toValue: 0,
+        damping: 18,
+        stiffness: 180,
+        mass: 0.9,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [backdropOpacity, sheetTranslateY, visible]);
 
   const handleMutePress = async () => {
     try {
@@ -65,22 +98,31 @@ export default function ChatOptionsSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
-        onPress={onClose}
-      >
-        <View
-          style={{
-            marginTop: "auto",
-            backgroundColor: themeColors.card,
-            padding: 20,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-          }}
+      <View style={styles.modalRoot}>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.backdrop, { opacity: backdropOpacity }]}
+        />
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: themeColors.card,
+              borderColor: themeColors.border + "20",
+              transform: [{ translateY: sheetTranslateY }],
+            },
+          ]}
         >
+          <View
+            style={[
+              styles.handle,
+              { backgroundColor: themeColors.border + "90" },
+            ]}
+          />
           <TouchableOpacity onPress={handleMutePress}>
             <ThemedText style={{ paddingVertical: 12 }}>
               {isMuted
@@ -98,8 +140,34 @@ export default function ChatOptionsSheet({
               {t("common.cancel")}
             </ThemedText>
           </TouchableOpacity>
-        </View>
-      </Pressable>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  sheet: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderWidth: 1,
+  },
+  handle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    marginBottom: 12,
+  },
+});

@@ -122,7 +122,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
-    elevation: 2,
   },
   iconCircle: {
     width: 60,

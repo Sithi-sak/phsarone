@@ -1,5 +1,6 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import AddressDropdowns from "@src/components/shared_components/AddressDropdowns";
+import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
 import DynamicPhosphorIcon from "@src/components/shared_components/DynamicPhosphorIcon";
 import LocationPickerMap from "@src/components/shared_components/LocationPickerMap";
 import PhotoUploadSection from "@src/components/shared_components/PhotoUploadSection";
@@ -46,6 +47,8 @@ export default function AddTradeProductScreen() {
   }>();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successDescription, setSuccessDescription] = useState("");
   const isEditMode = !!editId;
   const editPrefilledRef = useRef(false);
   const editProduct = isEditMode ? getProductById(editId as string) : undefined;
@@ -374,22 +377,14 @@ export default function AddTradeProductScreen() {
 
       await refreshProducts();
 
-      Alert.alert(
-        t("success"),
+      setSuccessDescription(
         isEditMode
           ? t("sellSection.update_success", {
               defaultValue: "Your trade product has been updated successfully!",
             })
           : t("trade.alerts.post_success"),
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              resetDraft();
-              router.back();
-            },
-          },
-        ]);
+      );
+      setShowSuccessModal(true);
     } catch (error) {
       console.error("Error posting trade product:", error);
       Alert.alert(t("error"), t("trade.alerts.post_failed"));
@@ -704,6 +699,20 @@ export default function AddTradeProductScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ActionStatusModal
+        visible={showSuccessModal}
+        tone="success"
+        hideHeaderTone
+        title={t("success")}
+        description={successDescription}
+        actionLabel="Continue"
+        onClose={() => {
+          setShowSuccessModal(false);
+          resetDraft();
+          router.back();
+        }}
+      />
     </SafeAreaView>
   );
 }

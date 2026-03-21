@@ -25,23 +25,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 type SectionKey =
   | "about"
   | "account-security"
-  | "addresses"
   | "billing"
   | "general"
   | "help-feedback"
   | "notifications"
   | "privacy";
-
-const SECTION_TITLES: Record<SectionKey, string> = {
-  about: "About PhsarOne",
-  "account-security": "Account and Security",
-  addresses: "Saved Meetup Addresses",
-  billing: "Subscription and Billing",
-  general: "General",
-  "help-feedback": "Help and Feedback",
-  notifications: "Notifications",
-  privacy: "Privacy",
-};
 
 const STORAGE_KEYS = {
   allowMessagesFromEveryone: "settings:privacy:allowMessagesFromEveryone",
@@ -125,11 +113,20 @@ export default function SettingsSectionScreen() {
   const { i18n, t } = useTranslation();
   const { mode, setMode } = useTheme();
   const { signOut, userId } = useAuth();
+  const sectionTitles: Record<SectionKey, string> = {
+    about: t("settings_sections.about"),
+    "account-security": t("settings_sections.account_security"),
+    billing: t("settings_sections.billing"),
+    general: t("settings_sections.general"),
+    "help-feedback": t("settings_sections.help_feedback"),
+    notifications: t("settings_sections.notifications"),
+    privacy: t("settings_sections.privacy"),
+  };
 
   const sectionKey = (section || "") as SectionKey;
   const validSection = useMemo(
-    () => Object.keys(SECTION_TITLES).includes(sectionKey),
-    [sectionKey],
+    () => Object.keys(sectionTitles).includes(sectionKey),
+    [sectionKey, sectionTitles],
   );
 
   const [prefs, setPrefs] = useState({
@@ -213,7 +210,10 @@ export default function SettingsSectionScreen() {
   };
 
   const comingSoon = (feature: string) => {
-    Alert.alert("Coming soon", `${feature} will be available in a future update.`);
+    Alert.alert(
+      t("common.coming_soon"),
+      t("settings_sections.coming_soon_message", { feature }),
+    );
   };
 
   if (!validSection) {
@@ -227,11 +227,11 @@ export default function SettingsSectionScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <CaretLeftIcon size={24} color={themeColors.text} weight="bold" />
           </TouchableOpacity>
-          <ThemedText style={styles.headerTitle}>Settings</ThemedText>
+          <ThemedText style={styles.headerTitle}>{t("settings_screen.settings")}</ThemedText>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.emptyWrap}>
-          <ThemedText style={styles.emptyTitle}>This setting page was not found.</ThemedText>
+          <ThemedText style={styles.emptyTitle}>{t("settings_sections.not_found")}</ThemedText>
         </View>
       </SafeAreaView>
     );
@@ -248,7 +248,7 @@ export default function SettingsSectionScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <CaretLeftIcon size={24} color={themeColors.text} weight="bold" />
         </TouchableOpacity>
-        <ThemedText style={styles.headerTitle}>{SECTION_TITLES[sectionKey]}</ThemedText>
+        <ThemedText style={styles.headerTitle}>{sectionTitles[sectionKey]}</ThemedText>
         <View style={{ width: 40 }} />
       </View>
 
@@ -260,22 +260,22 @@ export default function SettingsSectionScreen() {
         {sectionKey === "general" ? (
           <View style={[styles.card, { backgroundColor: themeColors.card }]}>
             <ActionRow
-              label="Language"
-              description="Choose Khmer or English for the app."
+              label={t("settings_sections.general_language")}
+              description={t("settings_sections.general_language_desc")}
               valueText={i18n.language.toUpperCase()}
               onPress={toggleLanguage}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ToggleRow
-              label="Dark mode"
-              description="Use dark appearance across the app."
+              label={t("settings_sections.general_dark_mode")}
+              description={t("settings_sections.general_dark_mode_desc")}
               value={mode === "dark"}
               onValueChange={(value) => setMode(value ? "dark" : "light")}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ToggleRow
-              label="Data saver"
-              description="Reduce auto-loading of media in chat and feeds."
+              label={t("settings_sections.general_data_saver")}
+              description={t("settings_sections.general_data_saver_desc")}
               value={prefs.dataSaver}
               onValueChange={(value) => updatePref("dataSaver", value)}
             />
@@ -285,22 +285,22 @@ export default function SettingsSectionScreen() {
         {sectionKey === "notifications" ? (
           <View style={[styles.card, { backgroundColor: themeColors.card }]}>
             <ToggleRow
-              label="New message alerts"
-              description="Get notified when you receive chat messages."
+              label={t("settings_sections.notifications_messages")}
+              description={t("settings_sections.notifications_messages_desc")}
               value={prefs.productUpdates}
               onValueChange={(value) => updatePref("productUpdates", value)}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ToggleRow
-              label="Trade offer updates"
-              description="Receive updates for accepted or declined offers."
+              label={t("settings_sections.notifications_trade")}
+              description={t("settings_sections.notifications_trade_desc")}
               value={prefs.offerUpdates}
               onValueChange={(value) => updatePref("offerUpdates", value)}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ToggleRow
-              label="Promotions"
-              description="Allow occasional product and campaign announcements."
+              label={t("settings_sections.notifications_promotions")}
+              description={t("settings_sections.notifications_promotions_desc")}
               value={prefs.marketing}
               onValueChange={(value) => updatePref("marketing", value)}
             />
@@ -310,24 +310,30 @@ export default function SettingsSectionScreen() {
         {sectionKey === "privacy" ? (
           <View style={[styles.card, { backgroundColor: themeColors.card }]}>
             <ToggleRow
-              label="Show online status"
-              description="Let others see when you are active in chat."
+              label={t("settings_sections.privacy_online")}
+              description={t("settings_sections.privacy_online_desc")}
               value={prefs.showOnlineStatus}
               onValueChange={(value) => updatePref("showOnlineStatus", value)}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ToggleRow
-              label="Read receipts"
-              description="Allow buyers and sellers to see when messages are read."
+              label={t("settings_sections.privacy_receipts")}
+              description={t("settings_sections.privacy_receipts_desc")}
               value={prefs.readReceipts}
               onValueChange={(value) => updatePref("readReceipts", value)}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ToggleRow
-              label="Messages from everyone"
-              description="Turn off to receive messages only from users you follow."
+              label={t("settings_sections.privacy_messages")}
+              description={t("settings_sections.privacy_messages_desc")}
               value={prefs.allowMessagesFromEveryone}
               onValueChange={(value) => updatePref("allowMessagesFromEveryone", value)}
+            />
+            <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
+            <ActionRow
+              label={t("settings_sections.privacy_blocked")}
+              description={t("settings_sections.privacy_blocked_desc")}
+              onPress={() => router.push("/settings/blocked-users" as Href)}
             />
           </View>
         ) : null}
@@ -335,45 +341,25 @@ export default function SettingsSectionScreen() {
         {sectionKey === "account-security" ? (
           <View style={[styles.card, { backgroundColor: themeColors.card }]}>
             <ActionRow
-              label="Edit profile information"
-              description="Update your name, phone, and bio."
+              label={t("settings_sections.account_edit")}
+              description={t("settings_sections.account_edit_desc")}
               onPress={() => router.push("/user/edit" as Href)}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ActionRow
-              label="View public profile"
-              description="See how others view your account."
+              label={t("settings_sections.account_view_profile")}
+              description={t("settings_sections.account_view_profile_desc")}
               onPress={() =>
-                userId ? router.push((`/user/${userId}` as Href)) : comingSoon("Public profile")
+                userId
+                  ? router.push((`/user/${userId}` as Href))
+                  : comingSoon(t("settings_sections.account_public_profile_feature"))
               }
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ActionRow
-              label="Change password"
-              description="Protect your account with a new password."
-              onPress={() => comingSoon("Password management")}
-            />
-            <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
-            <ActionRow
-              label="Two-factor authentication"
-              description="Add an extra security layer for sign in."
-              onPress={() => comingSoon("Two-factor authentication")}
-            />
-          </View>
-        ) : null}
-
-        {sectionKey === "addresses" ? (
-          <View style={[styles.card, { backgroundColor: themeColors.card }]}>
-            <ActionRow
-              label="Default meetup area"
-              description="Set your preferred trade handoff area."
-              onPress={() => comingSoon("Meetup location management")}
-            />
-            <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
-            <ActionRow
-              label="Saved meetup addresses"
-              description="Manage your frequently used meetup locations."
-              onPress={() => comingSoon("Saved addresses")}
+              label={t("settings_sections.account_change_password")}
+              description={t("settings_sections.account_change_password_desc")}
+              onPress={() => comingSoon(t("settings_sections.account_password_feature"))}
             />
           </View>
         ) : null}
@@ -381,21 +367,21 @@ export default function SettingsSectionScreen() {
         {sectionKey === "billing" ? (
           <View style={[styles.card, { backgroundColor: themeColors.card }]}>
             <ActionRow
-              label="Manage subscription"
-              description="Upgrade or change your current plan."
+              label={t("settings_sections.billing_manage")}
+              description={t("settings_sections.billing_manage_desc")}
               onPress={() => router.push("/subscription" as Href)}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ActionRow
-              label="Payment methods"
-              description="Add or update card and billing details."
-              onPress={() => comingSoon("Payment methods")}
+              label={t("settings_sections.billing_methods")}
+              description={t("settings_sections.billing_methods_desc")}
+              onPress={() => comingSoon(t("settings_sections.billing_methods_feature"))}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ActionRow
-              label="Receipts and invoices"
-              description="See billing history for your subscription."
-              onPress={() => comingSoon("Invoices")}
+              label={t("settings_sections.billing_receipts")}
+              description={t("settings_sections.billing_receipts_desc")}
+              onPress={() => comingSoon(t("settings_sections.billing_invoices_feature"))}
             />
           </View>
         ) : null}
@@ -403,21 +389,15 @@ export default function SettingsSectionScreen() {
         {sectionKey === "help-feedback" ? (
           <View style={[styles.card, { backgroundColor: themeColors.card }]}>
             <ActionRow
-              label="Help center"
-              description="Browse support resources and open tickets."
+              label={t("settings_sections.help_center")}
+              description={t("settings_sections.help_center_desc")}
               onPress={() => router.push("/user/support" as Href)}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ActionRow
-              label="Submit feedback"
-              description="Send product feedback or bug reports."
-              onPress={() => router.push("/user/new_ticket" as Href)}
-            />
-            <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
-            <ActionRow
-              label="Safety tips"
-              description="Best practices for secure buying and trading."
-              onPress={() => comingSoon("Safety tips")}
+              label={t("settings_sections.safety_tips")}
+              description={t("settings_sections.safety_tips_desc")}
+              onPress={() => router.push("/settings/safety-tips" as Href)}
             />
           </View>
         ) : null}
@@ -429,21 +409,21 @@ export default function SettingsSectionScreen() {
               <ThemedText style={styles.aboutTitle}>PhsarOne</ThemedText>
             </View>
             <ThemedText style={styles.aboutCopy}>
-              PhsarOne connects buyers and sellers directly for local listings and trades.
+              {t("settings_sections.about_copy")}
             </ThemedText>
 
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
 
             <ActionRow
-              label="App version"
+              label={t("settings_sections.app_version")}
               valueText={Constants.expoConfig?.version || "1.0.0"}
               onPress={() => {}}
             />
             <View style={[styles.separator, { backgroundColor: themeColors.text + "10" }]} />
             <ActionRow
-              label="Terms and policies"
-              description="Review terms of service and privacy policy."
-              onPress={() => comingSoon("Terms and policies")}
+              label={t("settings_sections.terms")}
+              description={t("settings_sections.terms_desc")}
+              onPress={() => router.push("/settings/terms" as Href)}
             />
           </View>
         ) : null}
@@ -454,7 +434,7 @@ export default function SettingsSectionScreen() {
             onPress={handleSignOut}
             activeOpacity={0.75}
           >
-            <ThemedText style={styles.signOutText}>Sign out</ThemedText>
+            <ThemedText style={styles.signOutText}>{t("settings_screen.sign_out")}</ThemedText>
           </TouchableOpacity>
         ) : null}
       </ScrollView>

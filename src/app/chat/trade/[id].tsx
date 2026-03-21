@@ -15,6 +15,7 @@ import {
   CheckIcon,
   ChecksIcon,
   DotsThreeVerticalIcon,
+  HandshakeIcon,
   ImageIcon,
   MapPinIcon,
   MicrophoneIcon,
@@ -52,6 +53,7 @@ import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { Colors } from "@src/constants/Colors";
 import { Message, useChat } from "@src/hooks/useChat";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { normalizeImageForUpload } from "@src/utils/imageUpload";
 import { getOptimizedStorageImageUrl } from "@src/utils/storageImage";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDuration(sec: number) {
@@ -219,6 +221,75 @@ function Bubble({
             duration={content.duration}
             isMe={isMe}
           />
+        );
+
+      case "trade_offer":
+        return (
+          <View
+            style={[
+              styles.tradeOfferCard,
+              {
+                backgroundColor: isMe
+                  ? "rgba(255,255,255,0.16)"
+                  : themeColors.background,
+                borderColor: isMe
+                  ? "rgba(255,255,255,0.22)"
+                  : themeColors.border,
+              },
+            ]}
+          >
+            <View style={styles.tradeOfferHeader}>
+              <View
+                style={[
+                  styles.tradeOfferIconWrap,
+                  {
+                    backgroundColor: isMe
+                      ? "rgba(255,255,255,0.18)"
+                      : Colors.reds[50],
+                  },
+                ]}
+              >
+                <HandshakeIcon
+                  size={14}
+                  color={isMe ? "#fff" : Colors.reds[500]}
+                  weight="fill"
+                />
+              </View>
+              <ThemedText
+                style={[styles.tradeOfferLabel, { color: textColor }]}
+              >
+                Trade offer sent
+              </ThemedText>
+            </View>
+
+            <View style={styles.tradeOfferBody}>
+              {!!content.offeredItemImage && (
+                <Image
+                  source={{ uri: content.offeredItemImage }}
+                  style={styles.tradeOfferThumb}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={styles.tradeOfferMeta}>
+                <ThemedText
+                  style={[styles.tradeOfferTitle, { color: textColor }]}
+                  numberOfLines={2}
+                >
+                  {content.offeredItemTitle || "Offered item"}
+                </ThemedText>
+                {!!content.offeredItemPrice && (
+                  <ThemedText
+                    style={[
+                      styles.tradeOfferPrice,
+                      { color: isMe ? "#fff" : Colors.reds[500] },
+                    ]}
+                  >
+                    {content.offeredItemPrice}
+                  </ThemedText>
+                )}
+              </View>
+            </View>
+          </View>
         );
 
       default: {
@@ -507,9 +578,12 @@ export default function TradeProductChatScreen() {
     const asset = result.assets[0];
     setIsSending(true);
     try {
-      const ext = (asset.uri.split(".").pop() || "jpg").toLowerCase();
-      const path = `chat/${conversation?.id || "unknown"}/${Date.now()}.${ext}`;
-      const url = await uploadFile(asset.uri, path, `image/${ext}`);
+      const normalizedUri = await normalizeImageForUpload(asset.uri, {
+        maxDimension: 1400,
+        compress: 0.72,
+      });
+      const path = `chat/${conversation?.id || "unknown"}/${Date.now()}.jpg`;
+      const url = await uploadFile(normalizedUri, path, "image/jpeg");
       await sendMessage({ type: "image", url });
     } catch (e: any) {
       Alert.alert(t("error"), e.message || "Could not upload image.");
@@ -979,6 +1053,52 @@ const styles = StyleSheet.create({
   imgBubble: {
     borderRadius: 16,
     padding: 3,
+  },
+  tradeOfferCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+    minWidth: 220,
+    padding: 12,
+  },
+  tradeOfferHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+  },
+  tradeOfferIconWrap: {
+    alignItems: "center",
+    borderRadius: 13,
+    height: 26,
+    justifyContent: "center",
+    marginRight: 8,
+    width: 26,
+  },
+  tradeOfferLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  tradeOfferBody: {
+    alignItems: "center",
+    flexDirection: "row",
+  },
+  tradeOfferThumb: {
+    borderRadius: 12,
+    height: 54,
+    marginRight: 10,
+    width: 54,
+  },
+  tradeOfferMeta: {
+    flex: 1,
+  },
+  tradeOfferTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  tradeOfferPrice: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 4,
   },
   metaRow: {
     alignItems: "center",

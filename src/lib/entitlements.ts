@@ -18,6 +18,7 @@ export type Entitlements = {
   maxActiveAds: number;
   listingDurationDays: number;
   monthlyBoosts: number;
+  hasBasicAnalytics: boolean;
   hasAdvancedAnalytics: boolean;
   hasPriorityRanking: boolean;
   hasVerifiedBadge: boolean;
@@ -32,6 +33,7 @@ const PLAN_LIMITS: Record<
     maxActiveAds: 5,
     listingDurationDays: 30,
     monthlyBoosts: 0,
+    hasBasicAnalytics: false,
     hasAdvancedAnalytics: false,
     hasPriorityRanking: false,
     hasVerifiedBadge: false,
@@ -41,6 +43,7 @@ const PLAN_LIMITS: Record<
     maxActiveAds: 15,
     listingDurationDays: 30,
     monthlyBoosts: 1,
+    hasBasicAnalytics: true,
     hasAdvancedAnalytics: false,
     hasPriorityRanking: false,
     hasVerifiedBadge: false,
@@ -50,6 +53,7 @@ const PLAN_LIMITS: Record<
     maxActiveAds: 50,
     listingDurationDays: 60,
     monthlyBoosts: 5,
+    hasBasicAnalytics: true,
     hasAdvancedAnalytics: false,
     hasPriorityRanking: true,
     hasVerifiedBadge: false,
@@ -59,6 +63,7 @@ const PLAN_LIMITS: Record<
     maxActiveAds: 9999,
     listingDurationDays: 120,
     monthlyBoosts: 9999,
+    hasBasicAnalytics: true,
     hasAdvancedAnalytics: true,
     hasPriorityRanking: true,
     hasVerifiedBadge: true,
