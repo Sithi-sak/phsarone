@@ -5,6 +5,10 @@ import { Colors } from "@src/constants/Colors";
 import { useTradeProducts } from "@src/context/TradeProductsContext";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { getAuthToken } from "@src/lib/auth";
+import {
+  buildOpenStreetMapSearchUrl,
+  buildOpenStreetMapUrl,
+} from "@src/lib/maps";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { formatPrice } from "@src/types/productTypes";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -113,11 +117,15 @@ export default function TradeProductDetailScreen() {
 
   const handleOpenMap = () => {
     if (!product?.coordinates) {
-      // For demo purposes if coordinates don't exist
-      Linking.openURL("https://www.google.com/maps");
+      Linking.openURL(
+        buildOpenStreetMapSearchUrl(product?.location || "Phnom Penh"),
+      );
       return;
     }
-    const url = `https://www.google.com/maps/search/?api=1&query=${product.coordinates.latitude},${product.coordinates.longitude}`;
+    const url = buildOpenStreetMapUrl(
+      product.coordinates.latitude,
+      product.coordinates.longitude,
+    );
     Linking.openURL(url);
   };
 

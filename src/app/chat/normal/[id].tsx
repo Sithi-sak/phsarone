@@ -47,6 +47,7 @@ import ImageViewerModal from "@src/components/chat_components/ImageViewerModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { Message, useChat } from "@src/hooks/useChat";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { buildOpenStreetMapUrl } from "@src/lib/maps";
 import { normalizeImageForUpload } from "@src/utils/imageUpload";
 import { getOptimizedStorageImageUrl } from "@src/utils/storageImage";
 
@@ -84,7 +85,7 @@ async function openLocationInMaps(
     ios: `maps:?q=${encodedLabel}&ll=${latitude},${longitude}`,
     android: `geo:${latitude},${longitude}?q=${latitude},${longitude}(${encodedLabel})`,
   });
-  const fallback = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+  const fallback = buildOpenStreetMapUrl(latitude, longitude);
 
   try {
     if (primary && (await Linking.canOpenURL(primary))) {

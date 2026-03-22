@@ -2,6 +2,7 @@ import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { SellDraft } from "@src/context/SellDraftContext";
 import { TradeDraft } from "@src/context/TradeDraftContext";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { buildOpenStreetMapUrl } from "@src/lib/maps";
 import * as Location from "expo-location";
 import { TFunction } from "i18next";
 import {
@@ -17,14 +18,16 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Image,
   Linking,
+  Modal,
   Platform,
+  Pressable,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
+import { WebView } from "react-native-webview";
 
 const DEFAULT_REGION = {
   latitude: 11.5564,
@@ -53,6 +56,98 @@ interface CustomButtonProps {
   icon?: React.ReactNode;
 }
 
+function buildLeafletHtml(
+  latitude: number,
+  longitude: number,
+  locked: boolean,
+) {
+  return `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+      html, body, #map { height: 100%; margin: 0; padding: 0; background: #f8fafc; }
+      .leaflet-container { font-family: sans-serif; }
+      .leaflet-bottom.leaflet-right { margin-bottom: 10px; }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const initial = {
+        latitude: ${latitude},
+        longitude: ${longitude},
+        zoom: 16,
+      };
+      let isLocked = ${locked ? "true" : "false"};
+      const map = L.map("map", {
+        zoomControl: true,
+        attributionControl: false,
+      }).setView([initial.latitude, initial.longitude], initial.zoom);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+      }).addTo(map);
+
+      const marker = L.marker([initial.latitude, initial.longitude], {
+        draggable: !isLocked,
+      }).addTo(map);
+
+      function postSelection(lat, lng) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: "locationSelected",
+          latitude: lat,
+          longitude: lng,
+        }));
+      }
+
+      function updateMarker(lat, lng, zoom, lockedValue) {
+        isLocked = !!lockedValue;
+        marker.setLatLng([lat, lng]);
+        marker.dragging[isLocked ? "disable" : "enable"]();
+        if (zoom) {
+          map.setView([lat, lng], zoom, { animate: true });
+        }
+      }
+
+      map.on("click", function (e) {
+        if (isLocked) return;
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+        marker.setLatLng([lat, lng]);
+        postSelection(lat, lng);
+      });
+
+      marker.on("dragend", function () {
+        if (isLocked) return;
+        const pos = marker.getLatLng();
+        postSelection(pos.lat, pos.lng);
+      });
+
+      function handleMessage(raw) {
+        try {
+          const data = JSON.parse(raw);
+          if (data.type === "setMarker") {
+            updateMarker(data.latitude, data.longitude, data.zoom, data.locked);
+          }
+        } catch {}
+      }
+
+      document.addEventListener("message", function (event) {
+        handleMessage(event.data);
+      });
+      window.addEventListener("message", function (event) {
+        handleMessage(event.data);
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 export default function LocationPickerMap({
   onConfirmLocation,
   currentDraft,
@@ -61,9 +156,18 @@ export default function LocationPickerMap({
   const { t } = useTranslation();
   const themeColors = useThemeColor();
   const mapRef = useRef<MapView>(null);
-  const [previewFailed, setPreviewFailed] = useState(false);
+  const previewMapRef = useRef<WebView>(null);
+  const expandedMapRef = useRef<WebView>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const initialCoord =
+    currentDraft.location.latitude && currentDraft.location.longitude
+      ? currentDraft.location
+      : {
+          latitude: DEFAULT_REGION.latitude,
+          longitude: DEFAULT_REGION.longitude,
+        };
 
   const [hasSelectedLocation, setHasSelectedLocation] = useState(
     !!(
@@ -73,17 +177,28 @@ export default function LocationPickerMap({
   );
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isRetracking, setIsRetracking] = useState(false);
-  const [markerCoord, setMarkerCoord] = useState(currentDraft.location);
+  const [markerCoord, setMarkerCoord] = useState(initialCoord);
+  const [draftMarkerCoord, setDraftMarkerCoord] = useState(initialCoord);
   const [selectedAddress, setSelectedAddress] = useState<string>("");
   const [selectedAccuracy, setSelectedAccuracy] = useState<number | null>(null);
+  const [showExpandedMap, setShowExpandedMap] = useState(false);
+
+  const hasAndroidMapsKey =
+    Platform.OS !== "android" ||
+    Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
+  const mapUrl = buildOpenStreetMapUrl(
+    markerCoord.latitude,
+    markerCoord.longitude,
+  );
 
   useEffect(() => {
     if (!hasSelectedLocation) {
       fetchCurrentLocation();
+    } else {
+      refreshLocationDetails(markerCoord.latitude, markerCoord.longitude);
     }
   }, []);
 
-  // Pulse animation for retracking
   useEffect(() => {
     if (isRetracking) {
       Animated.loop(
@@ -106,7 +221,6 @@ export default function LocationPickerMap({
     }
   }, [isRetracking]);
 
-  // Fade in detail card
   useEffect(() => {
     if (hasSelectedLocation) {
       Animated.timing(fadeAnim, {
@@ -116,6 +230,29 @@ export default function LocationPickerMap({
       }).start();
     }
   }, [hasSelectedLocation]);
+
+  useEffect(() => {
+    if (!hasAndroidMapsKey && hasSelectedLocation) {
+      syncPreviewMapMarker(markerCoord.latitude, markerCoord.longitude);
+    }
+  }, [
+    hasAndroidMapsKey,
+    hasSelectedLocation,
+    isConfirmed,
+    markerCoord.latitude,
+    markerCoord.longitude,
+  ]);
+
+  useEffect(() => {
+    if (!hasAndroidMapsKey && showExpandedMap) {
+      syncExpandedMapMarker(draftMarkerCoord.latitude, draftMarkerCoord.longitude);
+    }
+  }, [
+    hasAndroidMapsKey,
+    showExpandedMap,
+    draftMarkerCoord.latitude,
+    draftMarkerCoord.longitude,
+  ]);
 
   const tx = (key: string, fallback: string) => {
     const value = t(key as any);
@@ -196,6 +333,38 @@ export default function LocationPickerMap({
     });
   };
 
+  const syncPreviewMapMarker = (
+    latitude: number,
+    longitude: number,
+    zoom = 16,
+  ) => {
+    previewMapRef.current?.postMessage(
+      JSON.stringify({
+        type: "setMarker",
+        latitude,
+        longitude,
+        zoom,
+        locked: isConfirmed,
+      }),
+    );
+  };
+
+  const syncExpandedMapMarker = (
+    latitude: number,
+    longitude: number,
+    zoom = 16,
+  ) => {
+    expandedMapRef.current?.postMessage(
+      JSON.stringify({
+        type: "setMarker",
+        latitude,
+        longitude,
+        zoom,
+        locked: false,
+      }),
+    );
+  };
+
   const fetchCurrentLocation = async () => {
     setIsRetracking(true);
     try {
@@ -231,7 +400,7 @@ export default function LocationPickerMap({
         try {
           await Location.enableNetworkProviderAsync();
         } catch {
-          // User may dismiss the high-accuracy prompt.
+          // User may dismiss the prompt.
         }
       }
 
@@ -240,15 +409,23 @@ export default function LocationPickerMap({
         latitude: currentLocation.coords.latitude,
         longitude: currentLocation.coords.longitude,
       };
-      onUpdateDraft("location", newLocation);
-      setMarkerCoord(newLocation);
-      mapRef.current?.animateToRegion(
-        { ...newLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-        1000,
-      );
-      setHasSelectedLocation(true);
-      setIsConfirmed(false);
-      setPreviewFailed(false);
+
+      if (showExpandedMap) {
+        setDraftMarkerCoord(newLocation);
+        syncExpandedMapMarker(newLocation.latitude, newLocation.longitude);
+      } else {
+        onUpdateDraft("location", newLocation);
+        setMarkerCoord(newLocation);
+        setDraftMarkerCoord(newLocation);
+        mapRef.current?.animateToRegion(
+          { ...newLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+          1000,
+        );
+        syncPreviewMapMarker(newLocation.latitude, newLocation.longitude);
+        setHasSelectedLocation(true);
+        setIsConfirmed(false);
+      }
+
       await refreshLocationDetails(
         newLocation.latitude,
         newLocation.longitude,
@@ -266,15 +443,6 @@ export default function LocationPickerMap({
   };
 
   const styles = getStyles(themeColors);
-  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${markerCoord.latitude},${markerCoord.longitude}`;
-  const previewCoord = hasSelectedLocation ? markerCoord : DEFAULT_REGION;
-  const hasAndroidMapsKey =
-    Platform.OS !== "android" ||
-    Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
-  const staticMapUrl =
-    `https://staticmap.openstreetmap.de/staticmap.php?center=` +
-    `${previewCoord.latitude},${previewCoord.longitude}` +
-    `&zoom=15&size=800x320&markers=${previewCoord.latitude},${previewCoord.longitude},red-pushpin`;
 
   const CustomButton = ({
     title,
@@ -297,8 +465,10 @@ export default function LocationPickerMap({
     </TouchableOpacity>
   );
 
-  const handleTap = (coordinate: { latitude: number; longitude: number }) => {
-    if (isConfirmed) return;
+  const applySelectedLocation = (
+    coordinate: { latitude: number; longitude: number },
+    options?: { keepConfirmed?: boolean },
+  ) => {
     setMarkerCoord(coordinate);
     setSelectedAccuracy(null);
     onUpdateDraft("location", coordinate);
@@ -307,20 +477,51 @@ export default function LocationPickerMap({
       500,
     );
     setHasSelectedLocation(true);
-    setIsConfirmed(false);
+    setIsConfirmed(options?.keepConfirmed ?? false);
     refreshLocationDetails(coordinate.latitude, coordinate.longitude);
+  };
+
+  const handleTap = (coordinate: { latitude: number; longitude: number }) => {
+    if (isConfirmed) return;
+    applySelectedLocation(coordinate);
   };
 
   const handleDragEnd = (coordinate: {
     latitude: number;
     longitude: number;
   }) => {
-    setMarkerCoord(coordinate);
-    setSelectedAccuracy(null);
-    onUpdateDraft("location", coordinate);
-    setHasSelectedLocation(true);
-    setIsConfirmed(false);
-    refreshLocationDetails(coordinate.latitude, coordinate.longitude);
+    applySelectedLocation(coordinate);
+  };
+
+  const handlePreviewMapMessage = (event: {
+    nativeEvent: { data: string };
+  }) => {
+    try {
+      const payload = JSON.parse(event.nativeEvent.data);
+      if (payload?.type !== "locationSelected") return;
+      if (isConfirmed) return;
+      applySelectedLocation({
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+      });
+    } catch {
+      // Ignore malformed messages.
+    }
+  };
+
+  const handleExpandedMapMessage = (event: {
+    nativeEvent: { data: string };
+  }) => {
+    try {
+      const payload = JSON.parse(event.nativeEvent.data);
+      if (payload?.type !== "locationSelected") return;
+      setDraftMarkerCoord({
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+      });
+    } catch {
+      // Ignore malformed messages.
+    }
   };
 
   const accuracyColor =
@@ -332,9 +533,31 @@ export default function LocationPickerMap({
           ? "#f59e0b"
           : "#ef4444";
 
+  const previewMapHtml = buildLeafletHtml(
+    markerCoord.latitude || DEFAULT_REGION.latitude,
+    markerCoord.longitude || DEFAULT_REGION.longitude,
+    isConfirmed,
+  );
+  const expandedMapHtml = buildLeafletHtml(
+    draftMarkerCoord.latitude || markerCoord.latitude || DEFAULT_REGION.latitude,
+    draftMarkerCoord.longitude ||
+      markerCoord.longitude ||
+      DEFAULT_REGION.longitude,
+    false,
+  );
+
+  const openExpandedMap = () => {
+    setDraftMarkerCoord(markerCoord);
+    setShowExpandedMap(true);
+  };
+
+  const saveExpandedMap = () => {
+    applySelectedLocation(draftMarkerCoord);
+    setShowExpandedMap(false);
+  };
+
   return (
     <>
-      {/* ── Map area ── */}
       <View
         style={[
           styles.mapContainer,
@@ -403,11 +626,9 @@ export default function LocationPickerMap({
             )}
           </>
         ) : (
-          /* ── Android fallback: static map preview ── */
           <View
             style={[styles.mapFallback, { backgroundColor: themeColors.card }]}
           >
-            {/* Header row */}
             <View style={styles.fallbackHeader}>
               <View style={styles.fallbackHeaderLeft}>
                 <MapPinIcon size={14} color={themeColors.tint} weight="fill" />
@@ -422,13 +643,13 @@ export default function LocationPickerMap({
                   styles.openMapBtn,
                   { borderColor: themeColors.tint + "40" },
                 ]}
-                onPress={() => Linking.openURL(mapUrl)}
+                onPress={openExpandedMap}
                 activeOpacity={0.7}
               >
                 <ThemedText
                   style={[styles.openMapBtnText, { color: themeColors.tint }]}
                 >
-                  {tx("sellSection.open_map", "Open in Maps")}
+                  {tx("sellSection.open_map", "Open Map")}
                 </ThemedText>
                 <ArrowSquareOutIcon
                   size={12}
@@ -438,96 +659,34 @@ export default function LocationPickerMap({
               </TouchableOpacity>
             </View>
 
-            {/* Map preview image */}
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => Linking.openURL(mapUrl)}
+            <View
               style={[
                 styles.previewWrapper,
                 { borderColor: themeColors.border },
               ]}
             >
-              {!previewFailed ? (
-                <>
-                  <Image
-                    source={{ uri: staticMapUrl }}
-                    style={styles.previewImage}
-                    resizeMode="cover"
-                    onError={() => setPreviewFailed(true)}
-                  />
-                  {/* Coordinate badge bottom-left */}
-                  <View style={styles.coordBadge}>
-                    <ThemedText style={styles.coordBadgeText}>
-                      {previewCoord.latitude.toFixed(5)},{" "}
-                      {previewCoord.longitude.toFixed(5)}
-                    </ThemedText>
-                  </View>
-                  {/* Tap hint top-right */}
-                  <View
-                    style={[
-                      styles.tapHint,
-                      { backgroundColor: themeColors.tint + "22" },
-                    ]}
-                  >
-                    <ArrowSquareOutIcon
-                      size={11}
-                      color={themeColors.tint}
-                      weight="bold"
-                    />
-                    <ThemedText
-                      style={[styles.tapHintText, { color: themeColors.tint }]}
-                    >
-                      Open
-                    </ThemedText>
-                  </View>
-                </>
-              ) : (
-                <View
-                  style={[
-                    styles.previewEmpty,
-                    {
-                      backgroundColor: themeColors.background,
-                      borderColor: themeColors.border,
-                    },
-                  ]}
-                >
-                  <MapPinIcon
-                    size={32}
-                    color={themeColors.tint}
-                    weight="fill"
-                  />
-                  <ThemedText
-                    style={[
-                      styles.previewEmptyTitle,
-                      { color: themeColors.text },
-                    ]}
-                  >
-                    {tx("sellSection.tap_to_open_map", "Tap to open map")}
-                  </ThemedText>
-                  <ThemedText
-                    style={[
-                      styles.previewEmptyCoord,
-                      { color: themeColors.text + "80" },
-                    ]}
-                  >
-                    {previewCoord.latitude.toFixed(6)},{" "}
-                    {previewCoord.longitude.toFixed(6)}
-                  </ThemedText>
-                </View>
-              )}
-            </TouchableOpacity>
+              <WebView
+                ref={previewMapRef}
+                originWhitelist={["*"]}
+                source={{ html: previewMapHtml }}
+                onMessage={handlePreviewMapMessage}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                scrollEnabled={false}
+                nestedScrollEnabled={false}
+                style={styles.previewMapWebView}
+              />
+            </View>
 
-            {/* GPS accuracy note */}
             <ThemedText
               style={[styles.gpsNote, { color: themeColors.text + "60" }]}
             >
               {tx(
                 "sellSection.gps_preview_hint",
-                "GPS coordinates are accurate even if map preview is unavailable.",
+                "Tap Open Map to adjust the pin precisely inside the app.",
               )}
             </ThemedText>
 
-            {/* Retrack button */}
             <TouchableOpacity
               style={[
                 styles.retrackChipFull,
@@ -568,7 +727,6 @@ export default function LocationPickerMap({
         )}
       </View>
 
-      {/* ── Location detail card ── */}
       {hasSelectedLocation && (
         <Animated.View
           style={[
@@ -580,7 +738,6 @@ export default function LocationPickerMap({
             },
           ]}
         >
-          {/* Header row */}
           <View style={styles.detailHeader}>
             <View style={styles.detailHeaderLeft}>
               <View
@@ -591,7 +748,7 @@ export default function LocationPickerMap({
               >
                 {tx(
                   "sellSection.selected_location_details",
-                  "Selected Location",
+                  "Selected Location Details",
                 )}
               </ThemedText>
             </View>
@@ -617,7 +774,6 @@ export default function LocationPickerMap({
             )}
           </View>
 
-          {/* Address */}
           <ThemedText
             style={[styles.detailAddress, { color: themeColors.text + "CC" }]}
             numberOfLines={2}
@@ -625,55 +781,12 @@ export default function LocationPickerMap({
             {selectedAddress ||
               tx(
                 "sellSection.address_preview_not_available",
-                "Fetching address…",
+                "Address preview not available yet.",
               )}
           </ThemedText>
-
-          {/* Coordinates row */}
-          <View
-            style={[
-              styles.coordRow,
-              {
-                backgroundColor: themeColors.background,
-                borderColor: themeColors.border,
-              },
-            ]}
-          >
-            <View style={styles.coordItem}>
-              <ThemedText
-                style={[styles.coordLabel, { color: themeColors.text + "60" }]}
-              >
-                LAT
-              </ThemedText>
-              <ThemedText
-                style={[styles.coordValue, { color: themeColors.text }]}
-              >
-                {markerCoord.latitude.toFixed(6)}
-              </ThemedText>
-            </View>
-            <View
-              style={[
-                styles.coordDivider,
-                { backgroundColor: themeColors.border },
-              ]}
-            />
-            <View style={styles.coordItem}>
-              <ThemedText
-                style={[styles.coordLabel, { color: themeColors.text + "60" }]}
-              >
-                LNG
-              </ThemedText>
-              <ThemedText
-                style={[styles.coordValue, { color: themeColors.text }]}
-              >
-                {markerCoord.longitude.toFixed(6)}
-              </ThemedText>
-            </View>
-          </View>
         </Animated.View>
       )}
 
-      {/* ── Action buttons ── */}
       <View style={styles.buttonContainer}>
         {!isConfirmed ? (
           <CustomButton
@@ -681,6 +794,7 @@ export default function LocationPickerMap({
             onPress={() => {
               onConfirmLocation(markerCoord);
               setIsConfirmed(true);
+              syncPreviewMapMarker(markerCoord.latitude, markerCoord.longitude);
             }}
             disabled={!hasSelectedLocation}
             icon={
@@ -722,7 +836,7 @@ export default function LocationPickerMap({
                 />
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setIsConfirmed(false)}
+                onPress={openExpandedMap}
                 style={[
                   styles.changeBtn,
                   { backgroundColor: themeColors.tint },
@@ -742,13 +856,138 @@ export default function LocationPickerMap({
           </View>
         )}
       </View>
+
+      {!hasAndroidMapsKey && (
+        <Modal
+          visible={showExpandedMap}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowExpandedMap(false)}
+        >
+          <View
+            style={[
+              styles.expandedMapScreen,
+              { backgroundColor: themeColors.background },
+            ]}
+          >
+            <View
+              style={[
+                styles.expandedMapHeader,
+                {
+                  backgroundColor: themeColors.card,
+                  borderBottomColor: themeColors.border,
+                },
+              ]}
+            >
+              <Pressable
+                onPress={() => setShowExpandedMap(false)}
+                style={styles.expandedMapHeaderSide}
+              >
+                <ThemedText style={styles.expandedMapHeaderAction}>
+                  {tx("common.cancel", "Cancel")}
+                </ThemedText>
+              </Pressable>
+
+              <ThemedText style={styles.expandedMapHeaderTitle}>
+                {tx("sellSection.set_map", "Set Map")}
+              </ThemedText>
+
+              <Pressable
+                onPress={saveExpandedMap}
+                style={styles.expandedMapHeaderSide}
+              >
+                <ThemedText
+                  style={[
+                    styles.expandedMapHeaderAction,
+                    { color: themeColors.primary },
+                  ]}
+                >
+                  {tx("common.save", "Save")}
+                </ThemedText>
+              </Pressable>
+            </View>
+
+            <View style={styles.expandedMapBody}>
+              <WebView
+                ref={expandedMapRef}
+                originWhitelist={["*"]}
+                source={{ html: expandedMapHtml }}
+                onMessage={handleExpandedMapMessage}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                style={styles.expandedMapWebView}
+              />
+            </View>
+
+            <View
+              style={[
+                styles.expandedMapFooter,
+                {
+                  backgroundColor: themeColors.background + "F2",
+                  borderTopColor: themeColors.border,
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.retrackChipFull,
+                  styles.expandedCurrentLocationBtn,
+                  {
+                    borderColor: themeColors.tint + "50",
+                    backgroundColor: themeColors.tint + "0D",
+                  },
+                  isRetracking && styles.retrackChipDisabled,
+                ]}
+                onPress={fetchCurrentLocation}
+                disabled={isRetracking}
+                activeOpacity={0.75}
+              >
+                <Animated.View style={{ opacity: pulseAnim }}>
+                  {isRetracking ? (
+                    <ActivityIndicator size="small" color={themeColors.tint} />
+                  ) : (
+                    <CrosshairIcon
+                      size={15}
+                      color={themeColors.tint}
+                      weight="bold"
+                    />
+                  )}
+                </Animated.View>
+                <ThemedText
+                  style={[
+                    styles.retrackChipFullText,
+                    { color: themeColors.tint },
+                  ]}
+                >
+                  {tx(
+                    "sellSection.Retrack_Current_Location",
+                    "Use current location",
+                  )}
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.expandedSaveBtn,
+                  { backgroundColor: themeColors.primary },
+                ]}
+                onPress={saveExpandedMap}
+                activeOpacity={0.85}
+              >
+                <ThemedText style={styles.expandedSaveBtnText}>
+                  {tx("common.save", "Save")}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </>
   );
 }
 
 const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
   StyleSheet.create({
-    // ── Map container ──
     mapContainer: {
       height: 220,
       borderRadius: 18,
@@ -767,7 +1006,6 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       ...StyleSheet.absoluteFillObject,
       backgroundColor: "rgba(0,0,0,0.25)",
     },
-    // ── Retrack button (on top of native map) ──
     retrackBtn: {
       position: "absolute",
       right: 10,
@@ -791,8 +1029,6 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       fontSize: 12,
       fontWeight: "600",
     },
-
-    // ── Android fallback ──
     mapFallback: {
       paddingHorizontal: 14,
       paddingTop: 12,
@@ -832,55 +1068,10 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       overflow: "hidden",
       borderWidth: 1,
     },
-    previewImage: {
+    previewMapWebView: {
       width: "100%",
-      height: 130,
-    },
-    coordBadge: {
-      position: "absolute",
-      left: 8,
-      bottom: 8,
-      backgroundColor: "rgba(0,0,0,0.55)",
-      borderRadius: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-    },
-    coordBadgeText: {
-      color: "#fff",
-      fontSize: 10.5,
-      fontWeight: "600",
-      letterSpacing: 0.2,
-    },
-    tapHint: {
-      position: "absolute",
-      top: 8,
-      right: 8,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 3,
-      borderRadius: 6,
-      paddingHorizontal: 7,
-      paddingVertical: 3,
-    },
-    tapHintText: {
-      fontSize: 10,
-      fontWeight: "700",
-    },
-    previewEmpty: {
-      width: "100%",
-      height: 130,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      borderWidth: 1,
-      borderStyle: "dashed" as any,
-    },
-    previewEmptyTitle: {
-      fontSize: 13,
-      fontWeight: "600",
-    },
-    previewEmptyCoord: {
-      fontSize: 11,
+      height: 220,
+      backgroundColor: themeColors.background,
     },
     gpsNote: {
       fontSize: 11,
@@ -902,8 +1093,6 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       fontSize: 13,
       fontWeight: "600",
     },
-
-    // ── Detail card ──
     detailCard: {
       borderWidth: 1,
       borderRadius: 14,
@@ -953,33 +1142,6 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       fontSize: 12.5,
       lineHeight: 18,
     },
-    coordRow: {
-      flexDirection: "row",
-      borderRadius: 10,
-      borderWidth: 1,
-      overflow: "hidden",
-      marginTop: 2,
-    },
-    coordItem: {
-      flex: 1,
-      alignItems: "center",
-      paddingVertical: 7,
-      gap: 2,
-    },
-    coordDivider: {
-      width: 1,
-    },
-    coordLabel: {
-      fontSize: 9,
-      fontWeight: "700",
-      letterSpacing: 1,
-    },
-    coordValue: {
-      fontSize: 12,
-      fontWeight: "600",
-    },
-
-    // ── Buttons ──
     buttonContainer: {
       marginTop: 4,
       marginBottom: 8,
@@ -1042,6 +1204,55 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     },
     changeBtnText: {
       fontSize: 13,
+      fontWeight: "700",
+    },
+    expandedMapScreen: {
+      flex: 1,
+    },
+    expandedMapHeader: {
+      height: 60,
+      borderBottomWidth: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+    },
+    expandedMapHeaderSide: {
+      minWidth: 64,
+    },
+    expandedMapHeaderTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+    },
+    expandedMapHeaderAction: {
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    expandedMapBody: {
+      flex: 1,
+    },
+    expandedMapWebView: {
+      flex: 1,
+      backgroundColor: themeColors.background,
+    },
+    expandedMapFooter: {
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderTopWidth: 1,
+    },
+    expandedCurrentLocationBtn: {
+      width: "100%",
+    },
+    expandedSaveBtn: {
+      borderRadius: 999,
+      paddingVertical: 15,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    expandedSaveBtnText: {
+      color: themeColors.primaryButtonText,
+      fontSize: 16,
       fontWeight: "700",
     },
   });

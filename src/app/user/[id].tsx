@@ -8,6 +8,7 @@ import { getAuthToken } from "@src/lib/auth";
 import { fetchBlockedUserIds } from "@src/lib/blockedUsers";
 import { getEntitlements } from "@src/lib/entitlements";
 import { createClerkSupabaseClient, supabase } from "@src/lib/supabase";
+import * as ExpoLinking from "expo-linking";
 import {
   Href,
   Stack,
@@ -240,9 +241,12 @@ export default function PublicProfileScreen() {
 
   const handleShareProfile = async () => {
     try {
-      const profileName = `${userData?.first_name || ""} ${userData?.last_name || ""}`.trim() || "seller";
+      const profileName =
+        `${userData?.first_name || ""} ${userData?.last_name || ""}`.trim() ||
+        "seller";
+      const profileLink = ExpoLinking.createURL(`/user/${id}`);
       await Share.share({
-        message: `Check out ${profileName}'s profile on PhsarOne.`,
+        message: `Check out ${profileName}'s profile on PhsarOne.\n${profileLink}`,
       });
     } catch (error) {
       console.warn("Profile share warning:", error);
@@ -418,22 +422,8 @@ export default function PublicProfileScreen() {
             <ThemedText style={styles.highlightLabel}>Active listings</ThemedText>
           </View>
           <View style={styles.highlightDivider} />
-          <View style={styles.highlightItem}>
-            <ThemedText style={styles.highlightValue}>4.9</ThemedText>
-            <ThemedText style={styles.highlightLabel}>Seller rating</ThemedText>
-          </View>
-          <View style={styles.highlightDivider} />
-          <View style={styles.highlightItem}>
-            <ThemedText style={styles.highlightValue}>Fast</ThemedText>
-            <ThemedText style={styles.highlightLabel}>Response pace</ThemedText>
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.statsActionRow}>
-        <View style={styles.statsContainer}>
           <TouchableOpacity
-            style={styles.statItem}
+            style={styles.highlightItem}
             onPress={() =>
               router.push({
                 pathname: "/user/following",
@@ -441,11 +431,12 @@ export default function PublicProfileScreen() {
               } as any)
             }
           >
-            <ThemedText style={styles.statNumber}>{followerCount}</ThemedText>
-            <ThemedText style={styles.statLabel}>{t("public_profile.followers")}</ThemedText>
+            <ThemedText style={styles.highlightValue}>{followerCount}</ThemedText>
+            <ThemedText style={styles.highlightLabel}>Followers</ThemedText>
           </TouchableOpacity>
+          <View style={styles.highlightDivider} />
           <TouchableOpacity
-            style={styles.statItem}
+            style={styles.highlightItem}
             onPress={() =>
               router.push({
                 pathname: "/user/following",
@@ -453,23 +444,42 @@ export default function PublicProfileScreen() {
               } as any)
             }
           >
-            <ThemedText style={styles.statNumber}>{followingCount}</ThemedText>
-            <ThemedText style={styles.statLabel}>{t("public_profile.followings")}</ThemedText>
+            <ThemedText style={styles.highlightValue}>{followingCount}</ThemedText>
+            <ThemedText style={styles.highlightLabel}>Following</ThemedText>
           </TouchableOpacity>
         </View>
+      ) : null}
 
-        {isOwnProfile ? (
-          <TouchableOpacity
-            style={[styles.actionBtn, { borderColor: themeColors.text + "20" }]}
-            onPress={() => router.push("/user/edit" as Href)}
-          >
-            <ThemedText
-              style={[styles.actionBtnText, { color: themeColors.text }]}
+      {!isOwnProfile && (
+        <View style={styles.statsActionRow}>
+          <View style={styles.statsContainer}>
+            <TouchableOpacity
+              style={styles.statItem}
+              onPress={() =>
+                router.push({
+                  pathname: "/user/following",
+                  params: { id, type: "followers" },
+                } as any)
+              }
             >
-              {t("public_profile.edit_profile")}
-            </ThemedText>
-          </TouchableOpacity>
-        ) : isBlockedUser ? (
+              <ThemedText style={styles.statNumber}>{followerCount}</ThemedText>
+              <ThemedText style={styles.statLabel}>{t("public_profile.followers")}</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.statItem}
+              onPress={() =>
+                router.push({
+                  pathname: "/user/following",
+                  params: { id, type: "following" },
+                } as any)
+              }
+            >
+              <ThemedText style={styles.statNumber}>{followingCount}</ThemedText>
+              <ThemedText style={styles.statLabel}>{t("public_profile.followings")}</ThemedText>
+            </TouchableOpacity>
+          </View>
+
+          {isBlockedUser ? (
           <View style={styles.blockedActionPlaceholder} />
         ) : (
           <View style={styles.otherUserActions}>
@@ -507,8 +517,9 @@ export default function PublicProfileScreen() {
               </ThemedText>
             </TouchableOpacity>
           </View>
-        )}
-      </View>
+          )}
+        </View>
+      )}
 
       {isBlockedUser ? (
         <View
@@ -687,15 +698,6 @@ export default function PublicProfileScreen() {
                   onPress={handleShareProfile}
                 >
                   <ThemedText style={styles.menuItemText}>Share profile</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setShowProfileMenu(false);
-                    router.push("/settings" as Href);
-                  }}
-                >
-                  <ThemedText style={styles.menuItemText}>View settings</ThemedText>
                 </TouchableOpacity>
               </>
             ) : (

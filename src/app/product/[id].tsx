@@ -245,9 +245,6 @@ export default function ProductDetail() {
         "Seller",
       avatar: rawProduct.seller?.avatar_url,
       verified: sellerEntitlements.hasVerifiedBadge,
-      trusted: sellerEntitlements.hasSellerProfileEnhancement,
-      rating: sellerEntitlements.hasSellerProfileEnhancement ? 5.0 : undefined,
-      totalListings: sellerEntitlements.hasSellerProfileEnhancement ? 1 : undefined,
     },
   };
 

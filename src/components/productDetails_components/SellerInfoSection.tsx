@@ -89,27 +89,8 @@ const SellerInfoSection: React.FC<SellerInfoSectionProps> = ({
                 </ThemedText>
               </View>
             )}
-            {product.seller?.trusted && (
-              <View style={styles.badge}>
-                <Ionicons name="ribbon" size={12} color={themeColors.info} />
-                <ThemedText
-                  style={[styles.badgeText, { color: themeColors.info }]}
-                >
-                  {t("productDetail.trustedSeller")}
-                </ThemedText>
-              </View>
-            )}
           </View>
 
-          {product.seller?.rating && (
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={14} color={themeColors.warning} />
-              <ThemedText style={styles.ratingText}>
-                {product.seller.rating} ({product.seller.totalListings}{" "}
-                {t("common.listings")})
-              </ThemedText>
-            </View>
-          )}
         </View>
 
         {product.seller && onViewProfile && (

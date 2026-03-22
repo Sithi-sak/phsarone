@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { buildOpenStreetMapUrl } from "@src/lib/maps";
 import React from "react";
 import { Linking, StyleSheet, TouchableOpacity } from "react-native";
 
@@ -19,7 +20,7 @@ const ProductLocation: React.FC<ProductLocationProps> = ({
   const themeColors = useThemeColor();
 
   const handleOpenMap = () => {
-    const url = `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`;
+    const url = buildOpenStreetMapUrl(location.latitude, location.longitude);
     Linking.openURL(url);
   };
 

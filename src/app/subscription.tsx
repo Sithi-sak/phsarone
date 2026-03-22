@@ -106,7 +106,6 @@ export default function SubscriptionPage() {
         { text: t("subscription_screen.features.up_to_50_ads") },
         { text: t("subscription_screen.features.ads_active_60_days") },
         { text: t("subscription_screen.features.top_priority") },
-        { text: t("subscription_screen.features.seller_profile") },
         { text: t("subscription_screen.features.5_boosts") },
       ],
     },
