@@ -62,6 +62,7 @@ export default function FollowingScreen() {
         const blockedIds = await fetchBlockedUserIds(
           getToken,
           "blocked users follows list",
+          { cacheKey: userId },
         );
         if (blockedIds.length) {
           const blockedSet = new Set(blockedIds);

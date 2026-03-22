@@ -107,6 +107,30 @@ def average_embeddings(rows: list[dict[str, Any]]) -> str | None:
     return vector_to_literal(averaged)
 
 
+def build_recent_fallback_results(
+    supabase: Client,
+    limit: int,
+    user_id: str | None = None,
+    mode: str = "fallback_recent",
+) -> dict[str, Any]:
+    fallback = (
+        supabase.table("products")
+        .select("id")
+        .eq("status", "active")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return {
+        "user_id": user_id,
+        "results": [
+            {"id": row["id"], "semantic_score": 0.0}
+            for row in list(fallback.data or [])
+        ],
+        "mode": mode,
+    }
+
+
 def score_labels(image: Image.Image, labels: list[str]) -> dict[str, float]:
     classifier = get_image_moderation_pipeline()
     results = classifier(image, candidate_labels=labels)
@@ -254,15 +278,12 @@ def recommendations(
                 seed_ids.append(product_id)
 
         if not seed_ids:
-            fallback = supabase.table("products").select("id").eq(
-                "status",
-                "active",
-            ).order("created_at", desc=True).limit(limit).execute()
-            return {
-                "user_id": user_id,
-                "results": [{"id": row["id"], "semantic_score": 0.0} for row in list(fallback.data or [])],
-                "mode": "fallback_recent",
-            }
+            return build_recent_fallback_results(
+                supabase,
+                limit,
+                user_id=user_id,
+                mode="fallback_recent",
+            )
 
         seed_products = supabase.table("products").select(
             "id, embedding"
@@ -270,15 +291,12 @@ def recommendations(
 
         averaged_embedding = average_embeddings(list(seed_products.data or []))
         if not averaged_embedding:
-            fallback = supabase.table("products").select("id").eq(
-                "status",
-                "active",
-            ).order("created_at", desc=True).limit(limit).execute()
-            return {
-                "user_id": user_id,
-                "results": [{"id": row["id"], "semantic_score": 0.0} for row in list(fallback.data or [])],
-                "mode": "fallback_recent",
-            }
+            return build_recent_fallback_results(
+                supabase,
+                limit,
+                user_id=user_id,
+                mode="fallback_recent",
+            )
 
         matched = supabase.rpc(
             "match_products_by_embedding",
@@ -297,4 +315,10 @@ def recommendations(
             "mode": "personalized_embedding",
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        print(f"Recommendations fallback warning: {exc}")
+        return build_recent_fallback_results(
+            supabase,
+            limit,
+            user_id=user_id,
+            mode="fallback_recent_error",
+        )

@@ -1,9 +1,11 @@
 import { CAMBODIA_LOCATIONS } from "@/src/constants/CambodiaLocations";
 import useThemeColor from "@/src/hooks/useThemeColor";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -46,12 +48,55 @@ export default function LocationFilterModal({
     currentDistrict,
   );
   const [tempCommune, setTempCommune] = useState<string | null>(currentCommune);
+  const [mounted, setMounted] = useState(isVisible);
+  const backdropOpacity = React.useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = React.useRef(new Animated.Value(28)).current;
 
   useEffect(() => {
     setTempProvince(currentProvince);
     setTempDistrict(currentDistrict);
     setTempCommune(currentCommune);
   }, [currentProvince, currentDistrict, currentCommune]);
+
+  useEffect(() => {
+    if (isVisible) {
+      setMounted(true);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 140,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetTranslateY, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 120,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: 24,
+        duration: 150,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setMounted(false);
+      }
+    });
+  }, [backdropOpacity, isVisible, sheetTranslateY]);
 
   const getDistricts = () => {
     if (!tempProvince) return [];
@@ -170,15 +215,25 @@ export default function LocationFilterModal({
 
   return (
     <Modal
-      visible={isVisible}
+      visible={mounted}
       transparent
-      animationType="slide"
+      animationType="none"
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.backdrop, { opacity: backdropOpacity }]}
+      />
+      <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
 
-      <View style={[styles.sheet, { backgroundColor: themeColors.background }]}>
+      <Animated.View
+        style={[
+          styles.sheet,
+          { backgroundColor: themeColors.background },
+          { transform: [{ translateY: sheetTranslateY }] },
+        ]}
+      >
         {/* Handle */}
         <View style={styles.handle}>
           <View
@@ -259,7 +314,7 @@ export default function LocationFilterModal({
             </ThemedText>
           </Pressable>
         </View>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -275,8 +330,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     maxHeight: "90%",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.12,
@@ -301,7 +356,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerBtn: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
     minWidth: 44,
   },
   headerBtnText: {
@@ -381,7 +440,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     height: 54,
     paddingHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 999,
   },
   applyBtnText: {
     fontSize: 16,

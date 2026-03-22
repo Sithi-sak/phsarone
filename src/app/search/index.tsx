@@ -40,6 +40,8 @@ export default function SearchScreen() {
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
   const [searchError, setSearchError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const blockedUsersLoadedForRef = useRef<string | null>(null);
+  const blockedUsersLoadingRef = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -53,20 +55,34 @@ export default function SearchScreen() {
 
     const loadBlockedUsers = async () => {
       if (!userId || !getToken) {
+        blockedUsersLoadedForRef.current = null;
         setBlockedSellerIds([]);
         return;
       }
-      const ids = await fetchBlockedUserIds(getToken, "blocked sellers AI search");
+      if (
+        blockedUsersLoadedForRef.current === userId ||
+        blockedUsersLoadingRef.current
+      ) {
+        return;
+      }
+
+      blockedUsersLoadingRef.current = true;
+      const ids = await fetchBlockedUserIds(getToken, "blocked sellers AI search", {
+        cacheKey: userId,
+      });
       if (!isCancelled) {
+        blockedUsersLoadedForRef.current = userId;
         setBlockedSellerIds(ids);
       }
+      blockedUsersLoadingRef.current = false;
     };
 
     loadBlockedUsers();
     return () => {
       isCancelled = true;
+      blockedUsersLoadingRef.current = false;
     };
-  }, [userId, getToken]);
+  }, [userId]);
 
   useEffect(() => {
     let isCancelled = false;

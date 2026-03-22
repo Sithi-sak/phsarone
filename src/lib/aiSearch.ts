@@ -9,6 +9,77 @@ type RankedIdResult = {
   semantic_score?: number;
 };
 
+function normalizeSearchTokens(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+const QUERY_TOKEN_ALIASES: Record<string, string[]> = {
+  car: ["vehicle", "vehicles", "auto", "automobile", "cars"],
+  vehicle: ["car", "cars", "auto", "automobile", "vehicles"],
+  phone: ["smartphone", "mobile", "iphone", "android"],
+  laptop: ["computer", "notebook", "macbook"],
+};
+
+function countQueryTokenMatches(query: string, item: any) {
+  const queryTokens = Array.from(new Set(normalizeSearchTokens(query))).filter(
+    (token) => token.length >= 3,
+  );
+  if (queryTokens.length === 0) return 0;
+
+  const haystack = [
+    item?.title,
+    item?.description,
+    item?.search_text,
+    item?.location_name,
+    item?.category?.name_key,
+    item?.subcategory,
+    item?.seller?.user_type,
+    typeof item?.metadata === "object" ? JSON.stringify(item.metadata) : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return queryTokens.filter((token) => {
+    const aliasTokens = QUERY_TOKEN_ALIASES[token] || [];
+    return [token, ...aliasTokens].some((candidate) => haystack.includes(candidate));
+  }).length;
+}
+
+function refineQueryMatches(results: any[], query: string) {
+  const queryTokens = Array.from(new Set(normalizeSearchTokens(query))).filter(
+    (token) => token.length >= 3,
+  );
+  if (queryTokens.length < 2 || results.length === 0) {
+    return results;
+  }
+
+  const scored = results.map((item) => ({
+    item,
+    tokenMatches: countQueryTokenMatches(query, item),
+  }));
+
+  const strongestMatchCount = Math.max(
+    ...scored.map((entry) => entry.tokenMatches),
+    0,
+  );
+
+  if (strongestMatchCount < 2) {
+    return results;
+  }
+
+  const refined = scored
+    .filter((entry) => entry.tokenMatches >= 2)
+    .map((entry) => entry.item);
+
+  return refined.length > 0 ? refined : results;
+}
+
 const DEFAULT_AI_API_URL =
   Platform.OS === "android" ? "http://10.0.2.2:8000" : "http://localhost:8000";
 
@@ -116,10 +187,12 @@ export async function searchProductsWithAI(
       `/semantic-search?q=${encodeURIComponent(normalizedQuery)}`,
     );
     const ids = (payload.results || []).map((row) => row.id);
-    return fetchProductsByIds(ids, blockedSellerIds);
+    const products = await fetchProductsByIds(ids, blockedSellerIds);
+    return refineQueryMatches(products, normalizedQuery);
   } catch (error) {
     console.warn("AI search fallback warning:", error);
-    return fallbackKeywordSearch(normalizedQuery, blockedSellerIds);
+    const products = await fallbackKeywordSearch(normalizedQuery, blockedSellerIds);
+    return refineQueryMatches(products, normalizedQuery);
   }
 }
 

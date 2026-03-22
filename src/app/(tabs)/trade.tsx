@@ -573,7 +573,7 @@ const styles = StyleSheet.create({
   quickFilterButton: {
     flex: 1,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 999,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
   },
   filterActionSecondary: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 999,
     borderWidth: 1,
     flex: 1,
     paddingVertical: 12,
@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
   },
   filterActionPrimary: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 999,
     flex: 1,
     paddingVertical: 12,
   },

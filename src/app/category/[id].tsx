@@ -2,7 +2,6 @@ import { useAuth } from "@clerk/clerk-expo";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   CaretLeftIcon,
-  CheckIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
@@ -12,6 +11,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   FlatList,
   Modal,
   Pressable,
@@ -92,6 +93,9 @@ export default function CategorySearchScreen() {
     null,
   );
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [filterModalMounted, setFilterModalMounted] = useState(false);
+  const filterBackdropOpacity = React.useRef(new Animated.Value(0)).current;
+  const filterSheetTranslateY = React.useRef(new Animated.Value(36)).current;
 
   const activeFilterCount =
     (sortBy !== "none" ? 1 : 0) + (selectedCondition ? 1 : 0);
@@ -118,7 +122,9 @@ export default function CategorySearchScreen() {
         if (!isRefreshing) setLoading(true);
         const blockedSellerIds =
           userId && getToken
-            ? await fetchBlockedUserIds(getToken, "blocked sellers category feed")
+            ? await fetchBlockedUserIds(getToken, "blocked sellers category feed", {
+                cacheKey: userId,
+              })
             : [];
         let query = supabase
           .from("products")
@@ -228,11 +234,54 @@ export default function CategorySearchScreen() {
     setTempCondition(selectedCondition);
     setFilterModalVisible(true);
   };
+  const closeFilterModal = useCallback(() => {
+    setFilterModalVisible(false);
+  }, []);
   const applyFilters = () => {
     setSortBy(tempSortBy);
     setSelectedCondition(tempCondition);
-    setFilterModalVisible(false);
+    closeFilterModal();
   };
+
+  useEffect(() => {
+    if (filterModalVisible) {
+      setFilterModalMounted(true);
+      Animated.parallel([
+        Animated.timing(filterBackdropOpacity, {
+          toValue: 1,
+          duration: 140,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(filterSheetTranslateY, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(filterBackdropOpacity, {
+        toValue: 0,
+        duration: 140,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(filterSheetTranslateY, {
+        toValue: 28,
+        duration: 160,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setFilterModalMounted(false);
+      }
+    });
+  }, [filterBackdropOpacity, filterModalVisible, filterSheetTranslateY]);
 
   const getLocationLabel = useCallback(() => {
     if (!selectedProvince && !selectedDistrict && !selectedCommune) {
@@ -290,22 +339,25 @@ export default function CategorySearchScreen() {
       (tempSortBy !== "none" ? 1 : 0) + (tempCondition ? 1 : 0);
     return (
       <Modal
-        visible={filterModalVisible}
+        visible={filterModalMounted}
         transparent
-        animationType="slide"
+        animationType="none"
         statusBarTranslucent
-        onRequestClose={() => setFilterModalVisible(false)}
+        onRequestClose={closeFilterModal}
       >
-        <Pressable
-          style={S.backdrop}
-          onPress={() => setFilterModalVisible(false)}
+        <Animated.View
+          pointerEvents="none"
+          style={[S.backdrop, { opacity: filterBackdropOpacity }]}
         />
 
-        <View
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={closeFilterModal} />
+
+        <Animated.View
           style={[
             S.sheet,
             S.filterSheet,
             { backgroundColor: themeColors.background },
+            { transform: [{ translateY: filterSheetTranslateY }] },
           ]}
         >
           {/* Handle */}
@@ -325,7 +377,7 @@ export default function CategorySearchScreen() {
                   borderColor: themeColors.border,
                 },
               ]}
-              onPress={() => setFilterModalVisible(false)}
+              onPress={closeFilterModal}
             >
               <XIcon size={14} color={themeColors.text} weight="bold" />
             </Pressable>
@@ -369,14 +421,13 @@ export default function CategorySearchScreen() {
                       style={({ pressed }) => [
                         S.filterListRow,
                         {
-                          borderBottomColor: themeColors.border,
+                          borderColor: active
+                            ? themeColors.tint
+                            : themeColors.border,
                           backgroundColor: active
                             ? `${themeColors.tint}08`
                             : "transparent",
-                          borderBottomWidth:
-                            idx === SORT_OPTIONS.length - 1
-                              ? 0
-                              : StyleSheet.hairlineWidth,
+                          borderWidth: 1,
                           opacity: pressed ? 0.7 : 1,
                         },
                       ]}
@@ -409,17 +460,6 @@ export default function CategorySearchScreen() {
                       >
                         {t(opt.labelKey)}
                       </ThemedText>
-
-                      {active && (
-                        <View
-                          style={[
-                            S.checkCircle,
-                            { backgroundColor: themeColors.tint },
-                          ]}
-                        >
-                          <CheckIcon size={10} color="#fff" weight="bold" />
-                        </View>
-                      )}
                     </Pressable>
                   );
                 })}
@@ -461,12 +501,15 @@ export default function CategorySearchScreen() {
                   style={({ pressed }) => [
                     S.filterListRow,
                     {
-                      borderBottomColor: themeColors.border,
+                      borderColor:
+                        tempCondition === null
+                          ? themeColors.tint
+                          : themeColors.border,
                       backgroundColor:
                         tempCondition === null
                           ? `${themeColors.tint}08`
                           : "transparent",
-                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderWidth: 1,
                       opacity: pressed ? 0.7 : 1,
                     },
                   ]}
@@ -499,17 +542,6 @@ export default function CategorySearchScreen() {
                   >
                     {t("common.all_conditions")}
                   </ThemedText>
-
-                  {tempCondition === null && (
-                    <View
-                      style={[
-                        S.checkCircle,
-                        { backgroundColor: themeColors.tint },
-                      ]}
-                    >
-                      <CheckIcon size={10} color="#fff" weight="bold" />
-                    </View>
-                  )}
                 </Pressable>
 
                 {CONDITIONS.map((c, idx) => {
@@ -521,14 +553,13 @@ export default function CategorySearchScreen() {
                       style={({ pressed }) => [
                         S.filterListRow,
                         {
-                          borderBottomColor: themeColors.border,
+                          borderColor: active
+                            ? themeColors.tint
+                            : themeColors.border,
                           backgroundColor: active
                             ? `${themeColors.tint}08`
                             : "transparent",
-                          borderBottomWidth:
-                            idx === CONDITIONS.length - 1
-                              ? 0
-                              : StyleSheet.hairlineWidth,
+                          borderWidth: 1,
                           opacity: pressed ? 0.7 : 1,
                         },
                       ]}
@@ -561,17 +592,6 @@ export default function CategorySearchScreen() {
                       >
                         {t(c.labelKey)}
                       </ThemedText>
-
-                      {active && (
-                        <View
-                          style={[
-                            S.checkCircle,
-                            { backgroundColor: themeColors.tint },
-                          ]}
-                        >
-                          <CheckIcon size={10} color="#fff" weight="bold" />
-                        </View>
-                      )}
                     </Pressable>
                   );
                 })}
@@ -599,7 +619,7 @@ export default function CategorySearchScreen() {
               </ThemedText>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       </Modal>
     );
   };
@@ -998,8 +1018,8 @@ const S = StyleSheet.create({
     left: 0,
     right: 0,
     maxHeight: "85%",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     // shadow
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
@@ -1022,9 +1042,9 @@ const S = StyleSheet.create({
     paddingBottom: 16,
   },
   closeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
@@ -1057,7 +1077,7 @@ const S = StyleSheet.create({
 
     height: 54,
     paddingHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 999,
   },
   applyBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
 
@@ -1073,13 +1093,6 @@ const S = StyleSheet.create({
     justifyContent: "center",
   },
   radioCore: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#fff" },
-  checkCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   section: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 4 },
   sectionTitleRow: {
     flexDirection: "row",
@@ -1101,9 +1114,7 @@ const S = StyleSheet.create({
 
   // Sort rows (connected card style)
   filterList: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    overflow: "hidden",
+    gap: 10,
   },
   filterListRow: {
     flexDirection: "row",
@@ -1111,6 +1122,7 @@ const S = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     gap: 14,
+    borderRadius: 999,
   },
   sortLabel: { flex: 1, fontSize: 14, fontWeight: "500" },
 });

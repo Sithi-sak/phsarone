@@ -737,7 +737,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   reportSheet: {
-    borderRadius: 24,
+    borderRadius: 32,
     borderCurve: "continuous",
     borderWidth: 1,
     padding: 18,
@@ -754,9 +754,11 @@ const styles = StyleSheet.create({
   },
   reportReasonButton: {
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 14,
+    minHeight: 44,
+    justifyContent: "center",
   },
   reportReasonText: {
     fontSize: 14,
@@ -780,7 +782,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   reportPrimaryButton: {
-    flex: 1.2,
+    flex: 1,
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",

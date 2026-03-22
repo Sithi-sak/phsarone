@@ -36,8 +36,8 @@ const ProductHeader: React.FC<ProductHeaderProps> = ({
         {showMoreButton ? (
           <TouchableOpacity onPress={onMorePress} style={styles.headerButton}>
             <Ionicons
-              name="ellipsis-horizontal"
-              size={22}
+              name="warning-outline"
+              size={23}
               color={themeColors.text}
             />
           </TouchableOpacity>

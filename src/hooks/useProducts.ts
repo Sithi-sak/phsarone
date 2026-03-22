@@ -22,7 +22,9 @@ export function useProducts() {
       setLoading(true);
       const blockedSellerIds =
         userId && getToken
-          ? await fetchBlockedUserIds(getToken, "blocked sellers home feed")
+          ? await fetchBlockedUserIds(getToken, "blocked sellers home feed", {
+              cacheKey: userId,
+            })
           : [];
       const { data, error } = await supabase
         .from("products")

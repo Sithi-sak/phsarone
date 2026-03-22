@@ -134,6 +134,7 @@ export default function PublicProfileScreen() {
         const blockedIds = await fetchBlockedUserIds(
           getToken,
           "blocked sellers public profile",
+          { cacheKey: currentUserId },
         );
         blocked = blockedIds.includes(id);
       }
