@@ -3,6 +3,7 @@ import { Colors } from "@src/constants/Colors";
 import { useTradeProducts } from "@src/context/TradeProductsContext";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { getAuthToken } from "@src/lib/auth";
+import { createNotification } from "@src/lib/notificationCenter";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { TradeProduct } from "@src/types/productTypes";
 import { useRouter } from "expo-router";
@@ -169,6 +170,19 @@ export default function TradeOfferBottomSheet({
       });
 
       if (messageError) throw messageError;
+
+      await createNotification(authSupabase, {
+        userId: targetOwnerId,
+        type: "trade_offer",
+        title: "New trade offer",
+        body: `${selectedItem?.title || "Trade Item"} was offered for your trade listing.`,
+        data: {
+          conversationId,
+          chatType: "trade",
+          tradeId: targetTradeId,
+          sellerId: targetOwnerId,
+        },
+      });
 
       // CRITICAL: Close this bottom sheet modal first
       handleClose(() => {

@@ -8,6 +8,7 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  TextStyle,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -25,30 +26,48 @@ export default function ChatOptionsSheet({
   const hookThemeColors = useThemeColor();
   const themeColors = propsThemeColors || hookThemeColors;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = useRef(new Animated.Value(40)).current;
+  const popoverOpacity = useRef(new Animated.Value(0)).current;
+  const popoverScale = useRef(new Animated.Value(0.96)).current;
+  const popoverTranslateY = useRef(new Animated.Value(-6)).current;
 
   useEffect(() => {
     if (!visible) {
       backdropOpacity.setValue(0);
-      sheetTranslateY.setValue(40);
+      popoverOpacity.setValue(0);
+      popoverScale.setValue(0.96);
+      popoverTranslateY.setValue(-6);
       return;
     }
 
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         toValue: 1,
-        duration: 180,
+        duration: 140,
         useNativeDriver: true,
       }),
-      Animated.spring(sheetTranslateY, {
+      Animated.timing(popoverOpacity, {
+        toValue: 1,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+      Animated.timing(popoverScale, {
+        toValue: 1,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+      Animated.timing(popoverTranslateY, {
         toValue: 0,
-        damping: 18,
-        stiffness: 180,
-        mass: 0.9,
+        duration: 140,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [backdropOpacity, sheetTranslateY, visible]);
+  }, [
+    backdropOpacity,
+    popoverOpacity,
+    popoverScale,
+    popoverTranslateY,
+    visible,
+  ]);
 
   const handleMutePress = async () => {
     try {
@@ -109,35 +128,40 @@ export default function ChatOptionsSheet({
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <Animated.View
           style={[
-            styles.sheet,
+            styles.popover,
             {
               backgroundColor: themeColors.card,
-              borderColor: themeColors.border + "20",
-              transform: [{ translateY: sheetTranslateY }],
+              borderColor: themeColors.border,
+              opacity: popoverOpacity,
+              transform: [
+                { translateY: popoverTranslateY },
+                { scale: popoverScale },
+              ],
             },
           ]}
         >
-          <View
-            style={[
-              styles.handle,
-              { backgroundColor: themeColors.border + "90" },
-            ]}
-          />
-          <TouchableOpacity onPress={handleMutePress}>
-            <ThemedText style={{ paddingVertical: 12 }}>
+          <TouchableOpacity
+            onPress={handleMutePress}
+            style={styles.popoverItem}
+          >
+            <ThemedText style={styles.popoverItemText as TextStyle}>
               {isMuted
                 ? t("chat.unmute_notifications")
                 : t("chat.mute_notifications")}
             </ThemedText>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleBlockPress}>
-            <ThemedText style={{ paddingVertical: 12, color: "#EF4444" }}>
+          <View
+            style={[
+              styles.divider,
+              { backgroundColor: themeColors.border + "90" },
+            ]}
+          />
+          <TouchableOpacity
+            onPress={handleBlockPress}
+            style={styles.popoverItem}
+          >
+            <ThemedText style={[styles.popoverItemText as TextStyle, { color: "#EF4444" }]}>
               {t("chat.block")}
-            </ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onClose}>
-            <ThemedText style={{ paddingVertical: 12 }}>
-              {t("common.cancel")}
             </ThemedText>
           </TouchableOpacity>
         </Animated.View>
@@ -149,25 +173,35 @@ export default function ChatOptionsSheet({
 const styles = StyleSheet.create({
   modalRoot: {
     flex: 1,
-    justifyContent: "flex-end",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(15, 23, 42, 0.18)",
   },
-  sheet: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+  popover: {
+    position: "absolute",
+    top: 64,
+    right: 16,
+    minWidth: 190,
+    borderRadius: 18,
     borderWidth: 1,
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 12,
   },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 5,
-    borderRadius: 999,
-    marginBottom: 12,
+  popoverItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  popoverItemText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 10,
   },
 });

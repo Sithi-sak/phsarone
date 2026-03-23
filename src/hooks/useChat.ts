@@ -1,6 +1,7 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAuthToken } from '../lib/auth';
+import { createNotification } from '../lib/notificationCenter';
 import { showIncomingChatNotification } from '../lib/notifications';
 import { createClerkSupabaseClient, supabase } from '../lib/supabase';
 import { Database } from '../types/supabase';
@@ -760,6 +761,38 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
         .single();
 
       if (sendError) throw sendError;
+
+      const recipientId =
+        userId === conversation.buyer_id
+          ? conversation.seller_id
+          : conversation.buyer_id;
+      const senderUser =
+        userId === conversation.buyer_id ? conversation.buyer : conversation.seller;
+      const senderName =
+        `${senderUser?.first_name || ''} ${senderUser?.last_name || ''}`.trim() ||
+        'New message';
+      const recipientMuted =
+        recipientId === conversation.buyer_id
+          ? !!conversation.buyer_muted
+          : recipientId === conversation.seller_id
+            ? !!conversation.seller_muted
+            : false;
+
+      if (recipientId && recipientId !== userId && !recipientMuted) {
+        await createNotification(authSupabase, {
+          userId: recipientId,
+          type: content.type === 'trade_offer' ? 'trade_offer' : 'chat_message',
+          title: senderName,
+          body: buildNotificationBody(content),
+          data: {
+            conversationId: conversation.id,
+            chatType: conversation.trade_id ? 'trade' : 'regular',
+            productId: conversation.product_id,
+            tradeId: conversation.trade_id,
+            sellerId: conversation.seller_id,
+          },
+        });
+      }
       
       // Replace optimistic message and avoid duplicates if realtime arrives first.
       setMessages((prev) => {
@@ -849,7 +882,7 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
       const newMuted = !currentMuteStatus;
 
       const { data, error } = await authSupabase.functions.invoke(`chat-controls/mute/${conversation.id}`, {
-        method: 'PATCH',
+        method: 'POST',
         body: { muted: newMuted },
       });
 
