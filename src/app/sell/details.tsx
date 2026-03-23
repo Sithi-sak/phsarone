@@ -164,8 +164,11 @@ export default function ProductDetailsForm() {
   };
 
   const handleNavigateBack = () => {
-    // Clear image input when leaving this screen via back navigation.
-    updateDraft("photos", []);
+    if (!editId) {
+      resetDraft();
+    } else {
+      updateDraft("photos", []);
+    }
     router.back();
   };
 

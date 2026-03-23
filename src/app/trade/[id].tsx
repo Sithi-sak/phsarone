@@ -229,7 +229,7 @@ export default function TradeProductDetailScreen() {
       />
 
       {/* --- Header --- */}
-      <View style={[styles.header, { paddingTop: 16 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}

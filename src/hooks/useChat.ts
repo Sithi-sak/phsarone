@@ -1,4 +1,6 @@
 import { useAuth } from '@clerk/clerk-expo';
+import { decode } from 'base64-arraybuffer';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAuthToken } from '../lib/auth';
 import { createNotification } from '../lib/notificationCenter';
@@ -834,9 +836,10 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
   const uploadFile = async (uri: string, path: string, contentType: string): Promise<string> => {
     const token = await getAuthToken(getToken, "chat upload");
     const authSupabase = createClerkSupabaseClient(token);
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const arrayBuffer = await new Response(blob).arrayBuffer();
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: "base64",
+    });
+    const arrayBuffer = decode(base64);
 
     const bucket = "chat-media";
     const { data, error } = await authSupabase.storage

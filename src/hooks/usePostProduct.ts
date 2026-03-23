@@ -224,6 +224,9 @@ export function usePostProduct() {
     const photos = Array.isArray(draft?.photos) ? draft.photos : [];
 
     for (const uri of photos) {
+      if (typeof uri === "string" && /^https?:\/\//i.test(uri)) {
+        continue;
+      }
       const moderation = await moderateImageAsset(uri);
       if (shouldBlockImageModeration(moderation)) {
         throw new Error(

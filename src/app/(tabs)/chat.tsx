@@ -387,7 +387,7 @@ export default function ChatScreen() {
             styles.tab,
             activeTab === "regular"
               ? { backgroundColor: Colors.reds[500] }
-              : { backgroundColor: "#E5E7EB" },
+              : { backgroundColor: themeColors.card, borderColor: themeColors.border, borderWidth: 1 },
           ]}
           onPress={() => setActiveTab("regular")}
         >
@@ -396,7 +396,7 @@ export default function ChatScreen() {
               styles.tabText,
               activeTab === "regular"
                 ? { color: "white", fontWeight: "600" }
-                : { color: "#4B5563" },
+                : { color: themeColors.text + "CC" },
             ]}
           >
             {t("chat.regular")}
@@ -408,7 +408,7 @@ export default function ChatScreen() {
             styles.tab,
             activeTab === "trade"
               ? { backgroundColor: Colors.reds[500] }
-              : { backgroundColor: "#E5E7EB" },
+              : { backgroundColor: themeColors.card, borderColor: themeColors.border, borderWidth: 1 },
           ]}
           onPress={() => setActiveTab("trade")}
         >
@@ -417,7 +417,7 @@ export default function ChatScreen() {
               styles.tabText,
               activeTab === "trade"
                 ? { color: "white", fontWeight: "600" }
-                : { color: "#4B5563" },
+                : { color: themeColors.text + "CC" },
             ]}
           >
             {t("chat.trade")}

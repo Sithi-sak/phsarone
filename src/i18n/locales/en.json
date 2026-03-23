@@ -589,6 +589,8 @@
   },
   "trade": {
     "search_placeholder": "Search trades",
+    "trade_filters": "Trade filters",
+    "select_location": "Select location",
     "by_seller": "By",
     "estimated_trade_value_range": "Estimated Trade Value Range",
     "estimated_trade_value_range_description": "What do you think your item is worth for trade?",

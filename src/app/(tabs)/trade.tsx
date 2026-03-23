@@ -26,18 +26,19 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TradeScreen() {
   const router = useRouter();
   const themeColors = useThemeColor();
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
   const [selectedProvince, setSelectedProvince] = useState<string | null>(null);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [locationSearchQuery, setLocationSearchQuery] = useState("");
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { products, loading, refreshProducts } = useTradeProducts();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -86,6 +87,7 @@ export default function TradeScreen() {
           .replace(/\s+/g, "")
           .replace(/^./, (char) => char.toLowerCase()),
         label: province.name_en,
+        labelKm: province.name_km,
       })),
     [],
   );
@@ -95,7 +97,8 @@ export default function TradeScreen() {
     if (!query) return provinceOptions;
 
     return provinceOptions.filter((province) =>
-      province.label.toLowerCase().includes(query),
+      province.label.toLowerCase().includes(query) ||
+      province.labelKm.toLowerCase().includes(query),
     );
   }, [locationSearchQuery, provinceOptions]);
 
@@ -112,8 +115,11 @@ export default function TradeScreen() {
   };
 
   const selectedProvinceLabel =
-    provinceOptions.find((province) => province.key === selectedProvince)?.label ||
-    null;
+    provinceOptions.find((province) => province.key === selectedProvince)
+      ? i18n.language === "kh"
+        ? provinceOptions.find((province) => province.key === selectedProvince)?.labelKm
+        : provinceOptions.find((province) => province.key === selectedProvince)?.label
+      : null;
 
   if (loading) {
     return (
@@ -152,14 +158,18 @@ export default function TradeScreen() {
             onPress={(event) => event.stopPropagation()}
           >
             <View style={styles.filterModalHeader}>
-              <ThemedText style={styles.filterModalTitle}>Trade filters</ThemedText>
+              <ThemedText style={styles.filterModalTitle}>
+                {t("trade.trade_filters")}
+              </ThemedText>
               <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
                 <XIcon size={18} color={themeColors.text} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.filterSection}>
-              <ThemedText style={styles.filterSectionLabel}>Condition</ThemedText>
+              <ThemedText style={styles.filterSectionLabel}>
+                {t("trade.condition")}
+              </ThemedText>
               <View style={styles.filterChipWrap}>
                 {conditionOptions.map((option) => {
                   const isSelected = selectedCondition === option.value;
@@ -212,7 +222,7 @@ export default function TradeScreen() {
                 activeOpacity={0.85}
               >
                 <ThemedText style={[styles.filterActionSecondaryText, { color: themeColors.text }]}>
-                  Clear
+                  {t("common.clear")}
                 </ThemedText>
               </TouchableOpacity>
               <TouchableOpacity
@@ -229,7 +239,7 @@ export default function TradeScreen() {
                     { color: themeColors.primaryButtonText },
                   ]}
                 >
-                  Apply
+                  {t("common.apply")}
                 </ThemedText>
               </TouchableOpacity>
             </View>
@@ -262,7 +272,7 @@ export default function TradeScreen() {
               <CaretLeftIcon size={20} color={themeColors.text} weight="bold" />
             </TouchableOpacity>
             <ThemedText style={styles.locationHeaderTitle}>
-              Select location
+              {t("trade.select_location")}
             </ThemedText>
             <TouchableOpacity
               onPress={() => {
@@ -274,7 +284,7 @@ export default function TradeScreen() {
               <ThemedText
                 style={[styles.locationClearText, { color: themeColors.tint }]}
               >
-                Clear
+                {t("common.clear")}
               </ThemedText>
             </TouchableOpacity>
           </View>
@@ -292,7 +302,7 @@ export default function TradeScreen() {
             <TextInput
               value={locationSearchQuery}
               onChangeText={setLocationSearchQuery}
-              placeholder="Search province"
+              placeholder={t("common.search_province")}
               placeholderTextColor={themeColors.text + "80"}
               style={[styles.locationSearchInput, { color: themeColors.text }]}
               autoFocus
@@ -325,7 +335,7 @@ export default function TradeScreen() {
                   activeOpacity={0.8}
                 >
                   <ThemedText style={styles.locationItemLabel}>
-                    {item.label}
+                    {i18n.language === "kh" ? item.labelKm : item.label}
                   </ThemedText>
                 </TouchableOpacity>
               );
@@ -517,7 +527,10 @@ export default function TradeScreen() {
         />
 
         <TouchableOpacity
-          style={[styles.fab, { backgroundColor: themeColors.primary }]}
+          style={[
+            styles.fab,
+            { backgroundColor: themeColors.primary, bottom: insets.bottom + 72 },
+          ]}
           onPress={handleAddNewTrade}
           activeOpacity={0.8}
         >
@@ -790,7 +803,6 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: "absolute",
-    bottom: 76,
     right: 20,
     width: 48,
     height: 48,
