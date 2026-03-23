@@ -2,6 +2,7 @@ import ImageSuggestions from "@src/components/sell_components/ImageSuggestions";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import { useImageSuggestions } from "@src/hooks/useImageSuggestions";
 import {
+  isImageModerationServiceFailure,
   moderateImageAsset,
   shouldBlockImageModeration,
 } from "@src/lib/imageModeration";
@@ -131,6 +132,21 @@ export default function PhotoUploadSection({
             }
           } catch (error) {
             console.warn("Image moderation warning:", error);
+            if (isImageModerationServiceFailure(error)) {
+              const { metrics } = await validateImage(normalizedUri);
+
+              if (metrics.isLowResolution || metrics.isHighFileSize || metrics.issues.aspectRatio) {
+                console.log("Photo quality advisory:", {
+                  fileName: metrics.fileName || asset.fileName || "image",
+                  isLowResolution: metrics.isLowResolution,
+                  isHighFileSize: metrics.isHighFileSize,
+                  aspectRatioIssue: metrics.issues.aspectRatio,
+                });
+              }
+
+              acceptedUris.push(normalizedUri);
+              continue;
+            }
             showModerationPrompt(
               "Image could not be verified",
               "We couldn't verify this image for safety. Please try a different image or try again.",

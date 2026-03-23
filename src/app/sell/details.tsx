@@ -14,6 +14,7 @@ import { POST_FIELDS_MAP } from "@src/constants/postFields";
 import { useSellDraft } from "@src/context/SellDraftContext";
 import { usePostProduct } from "@src/hooks/usePostProduct";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { useAuth } from "@clerk/clerk-expo";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { CaretLeftIcon, ListBullets, SparkleIcon } from "phosphor-react-native";
 import React, { useEffect, useState } from "react";
@@ -32,6 +33,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ProductDetailsForm() {
   const { draft, updateDraft, setDraft, resetDraft } = useSellDraft();
+  const { isLoaded: isAuthLoaded } = useAuth();
   const { t } = useTranslation();
   const { editId } = useLocalSearchParams<{ editId: string }>();
   const [isInitialLoading, setIsInitialLoading] = useState(!!editId);
@@ -59,7 +61,7 @@ export default function ProductDetailsForm() {
 
   // Load existing product if editId is provided
   useEffect(() => {
-    if (editId) {
+    if (editId && isAuthLoaded) {
       const loadProduct = async () => {
         try {
           setIsInitialLoading(true);
@@ -75,7 +77,7 @@ export default function ProductDetailsForm() {
       };
       loadProduct();
     }
-  }, [editId]);
+  }, [editId, isAuthLoaded]);
 
   useEffect(() => {
     return () => {

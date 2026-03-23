@@ -13,6 +13,24 @@ export type ImageModerationResult = {
   scores: Record<string, number>;
 };
 
+export function isImageModerationServiceFailure(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+
+  return (
+    message.includes("Application failed to respond") ||
+    message.includes("502") ||
+    message.includes("500") ||
+    message.includes("Network request failed") ||
+    message.includes("timed out") ||
+    message.includes("out of memory")
+  );
+}
+
 export function shouldBlockImageModeration(
   moderation: ImageModerationResult,
 ): boolean {

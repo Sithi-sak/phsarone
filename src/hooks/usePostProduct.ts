@@ -6,6 +6,7 @@ import { POST_FIELDS_MAP } from "../constants/postFields";
 import { getAuthToken } from "../lib/auth";
 import { getEntitlements } from "../lib/entitlements";
 import {
+  isImageModerationServiceFailure,
   moderateImageAsset,
   shouldBlockImageModeration,
 } from "../lib/imageModeration";
@@ -227,7 +228,16 @@ export function usePostProduct() {
       if (typeof uri === "string" && /^https?:\/\//i.test(uri)) {
         continue;
       }
-      const moderation = await moderateImageAsset(uri);
+      let moderation;
+      try {
+        moderation = await moderateImageAsset(uri);
+      } catch (error) {
+        if (isImageModerationServiceFailure(error)) {
+          console.warn("Image moderation unavailable during listing submit:", error);
+          continue;
+        }
+        throw error;
+      }
       if (shouldBlockImageModeration(moderation)) {
         throw new Error(
           moderation.reasons.length > 0

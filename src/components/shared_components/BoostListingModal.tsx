@@ -1,6 +1,5 @@
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import useThemeColor from "@src/hooks/useThemeColor";
-import { RocketLaunchIcon } from "phosphor-react-native";
 import React from "react";
 import {
   Modal,
@@ -47,11 +46,6 @@ export default function BoostListingModal({
           ]}
           onPress={(event) => event.stopPropagation()}
         >
-          <View style={[styles.badge, { backgroundColor: "#FEECE9" }]}>
-            <RocketLaunchIcon size={13} color="#B42318" weight="fill" />
-            <ThemedText style={styles.badgeText}>Listing boost</ThemedText>
-          </View>
-
           <ThemedText style={[styles.title, { color: themeColors.text }]}>
             {title}
           </ThemedText>
@@ -113,8 +107,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
   },
   card: {
-    borderRadius: 24,
-    borderWidth: 1,
+    borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 20,
     shadowColor: "#000",
@@ -122,22 +115,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 24,
     width: "100%",
-  },
-  badge: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    flexDirection: "row",
-    gap: 6,
-    marginBottom: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  badgeText: {
-    color: "#B42318",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.2,
   },
   title: {
     fontSize: 22,
@@ -155,7 +132,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 99,
     borderWidth: 1,
     flex: 1,
     paddingVertical: 13,
@@ -166,7 +143,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 99,
     flex: 1,
     paddingVertical: 13,
   },
@@ -175,6 +152,5 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     fontSize: 14,
-    fontWeight: "700",
   },
 });
