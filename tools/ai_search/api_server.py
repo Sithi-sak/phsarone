@@ -61,6 +61,23 @@ def get_image_moderation_pipeline():
     return _image_moderation_pipeline
 
 
+def prepare_image_for_classification(image: Image.Image) -> Image.Image:
+    image = image.convert("RGB")
+    max_dim = 384
+    width, height = image.size
+    if max(width, height) <= max_dim:
+      return image
+
+    if width >= height:
+      new_width = max_dim
+      new_height = max(1, round((height / width) * max_dim))
+    else:
+      new_height = max_dim
+      new_width = max(1, round((width / height) * max_dim))
+
+    return image.resize((new_width, new_height))
+
+
 def vector_to_literal(values: list[float]) -> str:
     return "[" + ",".join(f"{value:.8f}" for value in values) + "]"
 
@@ -149,17 +166,7 @@ def health() -> dict[str, str]:
 async def moderate_image(file: UploadFile = File(...)) -> dict[str, Any]:
     try:
         raw = await file.read()
-        image = Image.open(io.BytesIO(raw)).convert("RGB")
-
-        nsfw_scores = score_labels(
-            image,
-            [
-                "safe product photo",
-                "adult content",
-                "explicit nudity",
-                "pornographic image",
-            ],
-        )
+        image = prepare_image_for_classification(Image.open(io.BytesIO(raw)))
         danger_scores = score_labels(
             image,
             [
@@ -173,11 +180,6 @@ async def moderate_image(file: UploadFile = File(...)) -> dict[str, Any]:
             ],
         )
 
-        nsfw_score = max(
-            nsfw_scores.get("adult content", 0.0),
-            nsfw_scores.get("explicit nudity", 0.0),
-            nsfw_scores.get("pornographic image", 0.0),
-        )
         danger_score = max(
             danger_scores.get("gun or firearm", 0.0),
             danger_scores.get("knife weapon", 0.0),
@@ -193,10 +195,6 @@ async def moderate_image(file: UploadFile = File(...)) -> dict[str, Any]:
         reasons: list[str] = []
         decision = "allow"
 
-        if nsfw_score >= 0.3:
-            reasons.append("adult content")
-            decision = "block"
-
         if (
             danger_score >= 0.3
             and toy_score < 0.22
@@ -207,12 +205,10 @@ async def moderate_image(file: UploadFile = File(...)) -> dict[str, Any]:
 
         if (
             decision == "allow"
-            and max(nsfw_score, danger_score) >= 0.18
+            and danger_score >= 0.18
             and toy_score < danger_score
         ):
             decision = "review"
-            if nsfw_score >= 0.18:
-                reasons.append("possible adult content")
             if danger_score >= 0.18:
                 reasons.append("possible dangerous item")
 
@@ -220,7 +216,6 @@ async def moderate_image(file: UploadFile = File(...)) -> dict[str, Any]:
             "decision": decision,
             "reasons": reasons,
             "scores": {
-                "nsfw": nsfw_score,
                 "dangerous_item": danger_score,
                 "toy_item": toy_score,
                 "safe_product": safe_product_score,
