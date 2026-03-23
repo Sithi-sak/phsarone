@@ -117,8 +117,12 @@ export default function TradeProductDetailScreen() {
 
   const handleOpenMap = () => {
     if (!product?.coordinates) {
+      const locationQuery =
+        [product?.commune, product?.district, product?.province]
+          .filter(Boolean)
+          .join(", ") || "Phnom Penh";
       Linking.openURL(
-        buildOpenStreetMapSearchUrl(product?.location || "Phnom Penh"),
+        buildOpenStreetMapSearchUrl(locationQuery),
       );
       return;
     }
@@ -832,19 +836,19 @@ const styles = StyleSheet.create({
   },
   btnOffer: {
     flex: 1,
-    height: 48,
+    height: 44,
     borderRadius: 99,
     justifyContent: "center",
     alignItems: "center",
   },
   btnTextWhite: {
     color: "#FFF",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "500",
   },
   btnTextGrey: {
     color: "#000",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "500",
   },
 });

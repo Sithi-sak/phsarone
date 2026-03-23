@@ -528,12 +528,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 999,
     justifyContent: "center",
-    minHeight: 52,
+    minHeight: 44,
   },
   signOutText: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 14,
   },
   emptyWrap: {
     alignItems: "center",

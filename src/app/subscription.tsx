@@ -1,13 +1,13 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { useStripe } from "@stripe/stripe-react-native";
 import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import PricingCard, {
   PricingPlan,
 } from "@src/components/subscription/PricingCard";
-import { getAuthToken } from "@src/lib/auth";
 import useThemeColor from "@src/hooks/useThemeColor";
+import { getAuthToken } from "@src/lib/auth";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
+import { useStripe } from "@stripe/stripe-react-native";
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { CaretLeftIcon } from "phosphor-react-native";

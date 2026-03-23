@@ -256,11 +256,10 @@ const styles = StyleSheet.create({
   listItem: {
     flexDirection: "row",
     marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 8,
     borderRadius: 12,
     overflow: "hidden",
     padding: 8,
-    elevation: 1,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -297,7 +296,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   listMetaText: {
-    fontSize: 13,
+    fontSize: 12,
     opacity: 0.5,
   },
   unbookmarkBtn: {

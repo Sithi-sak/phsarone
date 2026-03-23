@@ -71,12 +71,12 @@ const styles = StyleSheet.create({
   },
   conditionButton: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingVertical: 8,
+    borderRadius: 99,
     borderWidth: 1,
   },
   conditionText: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 12,
+    fontWeight: "400",
   },
 });

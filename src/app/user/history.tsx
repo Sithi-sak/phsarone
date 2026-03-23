@@ -11,14 +11,13 @@ import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Modal,
   Pressable,
   StyleSheet,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -542,8 +541,7 @@ const styles = StyleSheet.create({
   },
   productCard: {
     borderCurve: "continuous",
-    borderRadius: 6,
-    elevation: 1,
+    borderRadius: 8,
     flex: 1,
     overflow: "hidden",
     shadowColor: "#000",

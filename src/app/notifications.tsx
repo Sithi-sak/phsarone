@@ -187,6 +187,31 @@ export default function NotificationsScreen() {
     }
   };
 
+  const handleClearAll = async () => {
+    if (!userId || !getToken || notifications.length === 0) return;
+
+    const previous = notifications;
+    setNotifications([]);
+
+    try {
+      const token = await getAuthToken(
+        getToken,
+        "notifications clear all",
+        NOTIFICATION_AUTH_OPTIONS,
+      );
+      const authSupabase = createClerkSupabaseClient(token);
+      const { error } = await authSupabase
+        .from("notifications")
+        .delete()
+        .eq("user_id", userId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.warn("Notifications clear-all warning:", error);
+      setNotifications(previous);
+    }
+  };
+
   const renderIcon = (type: string) => {
     if (type === "trade_offer") {
       return <PackageIcon size={18} color={themeColors.primary} weight="fill" />;
@@ -217,29 +242,52 @@ export default function NotificationsScreen() {
           { backgroundColor: themeColors.background, borderBottomColor: themeColors.border },
         ]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <CaretLeftIcon size={24} color={themeColors.text} weight="bold" />
-        </TouchableOpacity>
-        <ThemedText style={styles.headerTitle}>
-          {t("notifications_screen.notifications")}
-        </ThemedText>
-        <TouchableOpacity
-          onPress={handleReadAll}
-          disabled={unreadCount === 0}
-          style={styles.readAllBtn}
-        >
-          <ThemedText
-            style={[
-              styles.readAllText,
-              {
-                color:
-                  unreadCount > 0 ? themeColors.tint : themeColors.text + "40",
-              },
-            ]}
-          >
-            Read all
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <CaretLeftIcon size={24} color={themeColors.text} weight="bold" />
+          </TouchableOpacity>
+          <ThemedText style={styles.headerTitle}>
+            {t("notifications_screen.notifications")}
           </ThemedText>
-        </TouchableOpacity>
+        </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={handleReadAll}
+            disabled={unreadCount === 0}
+            style={styles.headerActionBtn}
+          >
+            <ThemedText
+              style={[
+                styles.readAllText,
+                {
+                  color:
+                    unreadCount > 0 ? themeColors.tint : themeColors.text + "40",
+                },
+              ]}
+            >
+              Read all
+            </ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleClearAll}
+            disabled={notifications.length === 0}
+            style={styles.headerActionBtn}
+          >
+            <ThemedText
+              style={[
+                styles.readAllText,
+                {
+                  color:
+                    notifications.length > 0
+                      ? themeColors.tint
+                      : themeColors.text + "40",
+                },
+              ]}
+            >
+              Clear all
+            </ThemedText>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -348,26 +396,36 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 8,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  headerLeft: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  headerActionBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
+    flexShrink: 1,
   },
   backBtn: {
     padding: 8,
-  },
-  readAllBtn: {
-    minWidth: 64,
-    alignItems: "flex-end",
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    marginRight: 2,
   },
   readAllText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
   },
   content: {

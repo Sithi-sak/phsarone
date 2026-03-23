@@ -180,8 +180,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderCurve: "continuous",
-    borderRadius: 16,
-    elevation: 2,
+    borderRadius: 12,
     overflow: "hidden",
   },
   item: {
@@ -197,7 +196,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   itemLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "500",
   },
   separator: {
@@ -208,13 +207,11 @@ const styles = StyleSheet.create({
   signOutButton: {
     alignItems: "center",
     borderRadius: 99,
-    elevation: 2,
     justifyContent: "center",
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   signOutText: {
-    fontSize: 16,
-    fontWeight: "400",
+    fontSize: 14,
   },
 });
 

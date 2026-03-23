@@ -45,6 +45,7 @@ import {
 import ChatOptionsSheet from "@src/components/chat_components/ChatOptionsSheet";
 import ImageViewerModal from "@src/components/chat_components/ImageViewerModal";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
+import { Colors } from "@src/constants/Colors";
 import { Message, useChat } from "@src/hooks/useChat";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { buildOpenStreetMapUrl } from "@src/lib/maps";
@@ -301,7 +302,7 @@ function Bubble({
       case "image":
         return (
           <Image
-            source={{ uri: getOptimizedStorageImageUrl(content.url, "chat") }}
+            source={{ uri: content.url }}
             style={styles.imgMsg}
             resizeMode="cover"
           />
@@ -310,7 +311,6 @@ function Bubble({
       case "location":
         return (
           <TouchableOpacity
-            style={[styles.locRow, !isMe && styles.locReceiverCard]}
             onPress={() =>
               openLocationInMaps(
                 content.latitude,
@@ -318,20 +318,41 @@ function Bubble({
                 content.label,
               )
             }
+            style={[styles.locRow, !isMe && styles.locReceiverCard]}
           >
-            {/* ✅ Was hardcoded Colors.reds[500] — now uses themeColors.primary */}
             <MapPinIcon
               size={18}
-              color={isMe ? "#fff" : themeColors.primary}
+              color={isMe ? "#fff" : Colors.reds[500]}
               weight="fill"
             />
-            <ThemedText
-              style={{ color: textColor, fontSize: 14, marginLeft: 6, flex: 1 }}
-              numberOfLines={2}
-            >
-              {content.label ||
-                `${Number(content.latitude).toFixed(4)}, ${Number(content.longitude).toFixed(4)}`}
-            </ThemedText>
+            <View style={{ marginLeft: 6, flex: 1 }}>
+              <ThemedText
+                style={{ color: textColor, fontSize: 14, marginLeft: 0, flex: 1 }}
+                numberOfLines={2}
+              >
+                {content.label || t("chat.shared_location")}
+              </ThemedText>
+              <ThemedText
+                style={{
+                  color: isMe ? "#fff" : themeColors.text + "B3",
+                  fontSize: 11,
+                  marginTop: 2,
+                }}
+              >
+                {Number(content.latitude).toFixed(4)},{" "}
+                {Number(content.longitude).toFixed(4)}
+              </ThemedText>
+              <ThemedText
+                style={{
+                  color: isMe ? "#fff" : themeColors.text + "99",
+                  fontSize: 11,
+                  marginTop: 4,
+                  fontWeight: "500",
+                }}
+              >
+                {t("chat.tap_to_open_map")}
+              </ThemedText>
+            </View>
           </TouchableOpacity>
         );
 
@@ -1041,7 +1062,12 @@ export default function NormalProductChatScreen() {
     onImagePress,
   }: any) {
     const content = parseContent(item.content);
-    const bubbleBg = isMe ? themeColors.primary : themeColors.card;
+    const bubbleBg =
+      content.type === "image"
+        ? "transparent"
+        : isMe
+          ? themeColors.primary
+          : themeColors.card;
     const textColor = isMe ? "#fff" : themeColors.text;
 
     const inner = () => {
@@ -1053,9 +1079,7 @@ export default function NormalProductChatScreen() {
               activeOpacity={0.9}
             >
               <Image
-                source={{
-                  uri: getOptimizedStorageImageUrl(content.url, "chat"),
-                }}
+                source={{ uri: content.url }}
                 style={{ width: 200, height: 155, borderRadius: 13 }}
                 resizeMode="cover"
               />
@@ -1072,43 +1096,17 @@ export default function NormalProductChatScreen() {
                   content.label,
                 )
               }
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                padding: 10,
-                borderRadius: 14,
-                borderWidth: 1,
-                minWidth: 200,
-                maxWidth: 240,
-                gap: 10,
-                backgroundColor: isMe
-                  ? "rgba(255,255,255,0.15)"
-                  : "rgba(17, 24, 39, 0.06)",
-                borderColor: isMe
-                  ? themeColors.border + "40"
-                  : "rgba(17, 24, 39, 0.14)",
-              }}
+              style={[styles.locRow, !isMe && styles.locReceiverCard]}
             >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: isMe ? "#fff" : themeColors.primary + "20",
-                }}
-              >
-                <MapPinIcon
-                  size={18}
-                  color={themeColors.primary}
-                  weight="fill"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
+              <MapPinIcon
+                size={18}
+                color={isMe ? "#fff" : Colors.reds[500]}
+                weight="fill"
+              />
+              <View style={{ marginLeft: 6, flex: 1 }}>
                 <ThemedText
                   numberOfLines={2}
-                  style={{ color: textColor, fontWeight: "600", fontSize: 14 }}
+                  style={{ color: textColor, fontSize: 14, marginLeft: 0, flex: 1 }}
                 >
                   {content.label || t("chat.shared_location")}
                 </ThemedText>
@@ -1258,7 +1256,7 @@ export default function NormalProductChatScreen() {
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: themeColors.background }}
-      edges={["top", "left", "right"]}
+      edges={["top", "left", "right", "bottom"]}
     >
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -1348,9 +1346,10 @@ export default function NormalProductChatScreen() {
         }
       />
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        enabled={Platform.OS === "ios"}
         style={{ flex: 1, paddingBottom: Platform.OS === "ios" ? keyboardHeight : 0 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        keyboardVerticalOffset={0}
       >
         {/* ── Messages ────────────────────────────────────────────────────── */}
         <FlatList
@@ -1647,6 +1646,7 @@ export default function NormalProductChatScreen() {
                 {
                   backgroundColor: themeColors.background,
                   borderTopColor: themeColors.border + "30",
+                  marginBottom: Platform.OS === "android" ? keyboardHeight : 0,
                   paddingBottom:
                     Platform.OS === "ios"
                       ? keyboardHeight > 0
@@ -1654,7 +1654,9 @@ export default function NormalProductChatScreen() {
                         : insets.bottom > 0
                           ? insets.bottom + 4
                           : 12
-                      : 0,
+                      : insets.bottom > 0
+                        ? insets.bottom + 8
+                        : 12,
                 },
               ]}
             >

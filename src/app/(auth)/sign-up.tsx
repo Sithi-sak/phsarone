@@ -104,7 +104,7 @@ export default function SignUpScreen() {
           const msg = "Please try again";
           setError(msg);
           Alert.alert("Account Error", msg);
-        } catch (signOutErr) {
+        } catch {
           const msg = "An error occurred. Please try again later";
           setError(msg);
           Alert.alert("Error", msg);
@@ -142,8 +142,8 @@ export default function SignUpScreen() {
         setError(errorMsg);
         Alert.alert("Verification Failed", errorMsg);
       }
-    } catch (err: any) {
-      let errorMsg = "Invalid or expired verification code";
+    } catch {
+      const errorMsg = "Invalid or expired verification code";
 
       setError(errorMsg);
       Alert.alert("Verification Failed", errorMsg);
@@ -198,7 +198,7 @@ export default function SignUpScreen() {
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
               <View style={styles.footer}>
-                <Text style={styles.footerText}>Didn't receive a code? </Text>
+                <Text style={styles.footerText}>Didn&apos;t receive a code? </Text>
                 <TouchableOpacity onPress={() => setPendingVerification(false)}>
                   <Text style={styles.footerLink}>Try again</Text>
                 </TouchableOpacity>
@@ -310,7 +310,7 @@ export default function SignUpScreen() {
           </View>
 
           <Text style={styles.terms}>
-            By continuing, you agree to PhsarOne's Terms{"\n"}of Service and
+            By continuing, you agree to PhsarOne&apos;s Terms{"\n"}of Service and
             Privacy Policy.
           </Text>
         </ScrollView>

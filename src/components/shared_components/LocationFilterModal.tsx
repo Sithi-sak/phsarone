@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Animated,
+  Dimensions,
   Easing,
   Modal,
   Pressable,
@@ -38,6 +39,10 @@ export default function LocationFilterModal({
   currentDistrict,
   currentCommune,
 }: LocationFilterModalProps) {
+  const initialSheetOffset = Math.min(
+    Math.round(Dimensions.get("window").height * 0.55),
+    420,
+  );
   const { t, i18n } = useTranslation();
   const themeColors = useThemeColor();
   const [searchQuery, setSearchQuery] = useState("");
@@ -50,7 +55,9 @@ export default function LocationFilterModal({
   const [tempCommune, setTempCommune] = useState<string | null>(currentCommune);
   const [mounted, setMounted] = useState(isVisible);
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = React.useRef(new Animated.Value(28)).current;
+  const sheetTranslateY = React.useRef(
+    new Animated.Value(initialSheetOffset),
+  ).current;
 
   useEffect(() => {
     setTempProvince(currentProvince);
@@ -60,22 +67,26 @@ export default function LocationFilterModal({
 
   useEffect(() => {
     if (isVisible) {
+      backdropOpacity.setValue(0);
+      sheetTranslateY.setValue(initialSheetOffset);
       setMounted(true);
-      Animated.parallel([
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: 140,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(sheetTranslateY, {
-          toValue: 0,
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-      return;
+      const frame = requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(backdropOpacity, {
+            toValue: 1,
+            duration: 180,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(sheetTranslateY, {
+            toValue: 0,
+            duration: 280,
+            easing: Easing.bezier(0.22, 1, 0.36, 1),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+      return () => cancelAnimationFrame(frame);
     }
 
     Animated.parallel([
@@ -86,8 +97,8 @@ export default function LocationFilterModal({
         useNativeDriver: true,
       }),
       Animated.timing(sheetTranslateY, {
-        toValue: 24,
-        duration: 150,
+        toValue: initialSheetOffset,
+        duration: 190,
         easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }),
@@ -96,7 +107,7 @@ export default function LocationFilterModal({
         setMounted(false);
       }
     });
-  }, [backdropOpacity, isVisible, sheetTranslateY]);
+  }, [backdropOpacity, initialSheetOffset, isVisible, sheetTranslateY]);
 
   const getDistricts = () => {
     if (!tempProvince) return [];

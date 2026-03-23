@@ -25,7 +25,7 @@ export default function SignInPage() {
   const [password, setPassword] = React.useState("");
   const [code, setCode] = React.useState("");
   const [pendingVerification, setPendingVerification] = React.useState(false);
-  const [error, setError] = React.useState("");
+  const [, setError] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
 
   // Email validation regex
@@ -124,7 +124,7 @@ export default function SignInPage() {
           strategy: "email_code",
           code,
         });
-      } catch (firstFactorErr) {
+      } catch {
         // If first factor fails, try second factor
         console.log("First factor failed, trying second factor");
         signInAttempt = await signIn.attemptSecondFactor({
@@ -281,7 +281,7 @@ export default function SignInPage() {
             </TouchableOpacity>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Text style={styles.footerText}>Don&apos;t have an account? </Text>
               <TouchableOpacity
                 onPress={() => router.replace("/(auth)/sign-up")}
               >
@@ -291,7 +291,7 @@ export default function SignInPage() {
           </View>
 
           <Text style={styles.terms}>
-            By continuing, you agree to PhsarOne's Terms{"\n"}of Service and
+            By continuing, you agree to PhsarOne&apos;s Terms{"\n"}of Service and
             Privacy Policy.
           </Text>
         </ScrollView>

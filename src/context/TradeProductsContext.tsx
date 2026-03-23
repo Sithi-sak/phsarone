@@ -79,7 +79,7 @@ const mapTradeRowToTradeProduct = (row: TradeRow): TradeProduct => {
     images: row.images ?? [],
     title: row.title,
     owner_id: row.owner_id,
-    status: row.status,
+    status: row.status ?? undefined,
     seller: metadata.sellerName || metadata.owner?.name || row.owner_id,
     timeAgo: getTimeAgo(row.created_at),
     lookingFor: [
@@ -130,11 +130,16 @@ export function TradeProductsProvider({ children }: { children: ReactNode }) {
         
         // If we have joined user data, override the owner info
         if (row.owner) {
+          const currentOwner = product.owner ?? {
+            name: product.seller,
+            isVerified: false,
+            avatar: "",
+          };
           const fullName = [row.owner.first_name, row.owner.last_name].filter(Boolean).join(" ");
           product.owner = {
-            name: fullName || product.owner.name, // fallback to existing name if fullName is empty
-            isVerified: product.owner.isVerified,
-            avatar: row.owner.avatar_url || product.owner.avatar,
+            name: fullName || currentOwner.name,
+            isVerified: currentOwner.isVerified,
+            avatar: row.owner.avatar_url || currentOwner.avatar,
           };
           
           // Also update the top-level seller field for consistency

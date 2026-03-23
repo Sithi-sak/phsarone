@@ -681,10 +681,6 @@ export default function LocationPickerMap({
             <ThemedText
               style={[styles.gpsNote, { color: themeColors.text + "60" }]}
             >
-              {tx(
-                "sellSection.gps_preview_hint",
-                "Tap Open Map to adjust the pin precisely inside the app.",
-              )}
             </ThemedText>
 
             <TouchableOpacity
@@ -990,8 +986,8 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
   StyleSheet.create({
     mapContainer: {
       height: 220,
-      borderRadius: 18,
-      marginBottom: 10,
+      borderRadius: 16,
+      marginBottom: 8,
       overflow: "hidden",
       borderWidth: 1,
       borderColor: themeColors.border,
@@ -1034,7 +1030,7 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       paddingTop: 12,
       paddingBottom: 14,
       gap: 10,
-      borderRadius: 18,
+      borderRadius: 16,
     },
     fallbackHeader: {
       flexDirection: "row",
@@ -1064,9 +1060,9 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       fontWeight: "600",
     },
     previewWrapper: {
-      borderRadius: 12,
+      borderRadius: 8,
       overflow: "hidden",
-      borderWidth: 1,
+      borderWidth: 0,
     },
     previewMapWebView: {
       width: "100%",
@@ -1083,8 +1079,9 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
+      marginTop: -24,
       borderWidth: 1,
-      borderRadius: 12,
+      borderRadius: 99,
       paddingVertical: 10,
       paddingHorizontal: 14,
     },
@@ -1095,7 +1092,7 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     },
     detailCard: {
       borderWidth: 1,
-      borderRadius: 14,
+      borderRadius: 16,
       paddingHorizontal: 12,
       paddingTop: 10,
       paddingBottom: 12,
@@ -1111,6 +1108,8 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
+      flex: 1,
+      minWidth: 0,
     },
     pinDot: {
       width: 8,
@@ -1120,6 +1119,7 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     detailTitle: {
       fontSize: 13,
       fontWeight: "700",
+      flexShrink: 1,
     },
     accuracyBadge: {
       flexDirection: "row",
@@ -1148,12 +1148,14 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     },
     customButton: {
       backgroundColor: themeColors.tint,
-      paddingVertical: 14,
-      borderRadius: 14,
+      paddingVertical: 10,
+      borderRadius: 99,
       alignItems: "center",
       flexDirection: "row",
       justifyContent: "center",
       gap: 8,
+      minHeight: 44,
+      width: "100%",
     },
     disabledButton: {
       backgroundColor: themeColors.border,
@@ -1165,23 +1167,27 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
       color: themeColors.primaryButtonText,
       fontSize: 15,
       fontWeight: "600",
+      flexShrink: 1,
+      textAlign: "center",
     },
     confirmedContainer: {
+      marginTop: -4,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      borderRadius: 14,
+      borderRadius: 99,
       borderWidth: 1,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
+      paddingVertical: 8,
+      paddingHorizontal: 8,
     },
     confirmedLeft: {
+      marginLeft: 8,
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
+      gap: 8,
     },
     confirmedLabel: {
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "700",
     },
     confirmedActions: {
@@ -1192,18 +1198,18 @@ const getStyles = (themeColors: ReturnType<typeof useThemeColor>) =>
     mapLinkBtn: {
       width: 34,
       height: 34,
-      borderRadius: 10,
+      borderRadius: 99,
       borderWidth: 1,
       alignItems: "center",
       justifyContent: "center",
     },
     changeBtn: {
-      borderRadius: 10,
-      paddingVertical: 7,
-      paddingHorizontal: 14,
+      borderRadius: 99,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
     },
     changeBtnText: {
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "700",
     },
     expandedMapScreen: {

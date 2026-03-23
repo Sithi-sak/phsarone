@@ -1,4 +1,5 @@
 import { createClerkSupabaseClient } from "@src/lib/supabase";
+import { Json } from "@src/types/supabase";
 
 type AuthSupabaseClient = ReturnType<typeof createClerkSupabaseClient>;
 
@@ -7,7 +8,7 @@ type CreateNotificationInput = {
   type: string;
   title: string;
   body: string;
-  data?: Record<string, unknown> | null;
+  data?: Json | null;
 };
 
 export async function createNotification(

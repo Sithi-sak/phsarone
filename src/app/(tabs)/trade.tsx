@@ -1,7 +1,7 @@
 import { useTradeProducts } from "@/src/context/TradeProductsContext";
-import { CAMBODIA_LOCATIONS } from "@src/constants/CambodiaLocations";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
 import TradeProductCard from "@src/components/trade_components/TradeProductCard";
+import { CAMBODIA_LOCATIONS } from "@src/constants/CambodiaLocations";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { useRouter } from "expo-router";
 import {
@@ -563,7 +563,6 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     borderRadius: 99,
-    borderWidth: 1,
     paddingHorizontal: 12,
     height: 44,
     flexDirection: "row",
@@ -587,7 +586,6 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 999,
-    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -601,7 +599,7 @@ const styles = StyleSheet.create({
   },
   quickFilterButtonText: {
     flexShrink: 1,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   quickFilterActiveDot: {

@@ -10,8 +10,7 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  TouchableOpacity,
-  View,
+  TouchableOpacity
 } from "react-native";
 
 type ActionStatusModalProps = {
@@ -77,31 +76,6 @@ export default function ActionStatusModal({
           ]}
           onPress={(event) => event.stopPropagation()}
         >
-          {!hideHeaderTone && (
-            <View style={styles.headerRow}>
-              <View
-                style={[
-                  styles.iconWrap,
-                  { backgroundColor: toneConfig.iconBackground },
-                ]}
-              >
-                {toneConfig.icon}
-              </View>
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: toneConfig.badgeBackground },
-                ]}
-              >
-                <ThemedText
-                  style={[styles.badgeText, { color: toneConfig.badgeText }]}
-                >
-                  {toneConfig.label}
-                </ThemedText>
-              </View>
-            </View>
-          )}
-
           <ThemedText style={[styles.title, { color: themeColors.text }]}>
             {title}
           </ThemedText>
@@ -140,8 +114,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
   },
   card: {
-    borderRadius: 24,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderCurve: "continuous",
     paddingHorizontal: 20,
     paddingVertical: 20,
     shadowColor: "#000",
@@ -155,20 +129,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginBottom: 12,
-  },
-  iconWrap: {
-    alignItems: "center",
-    backgroundColor: "#E7F6EC",
-    borderRadius: 999,
-    height: 38,
-    justifyContent: "center",
-    width: 38,
-  },
-  badge: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
   },
   badgeText: {
     fontSize: 11,
@@ -187,11 +147,10 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 99,
     paddingVertical: 13,
   },
   primaryButtonText: {
     fontSize: 14,
-    fontWeight: "700",
   },
 });

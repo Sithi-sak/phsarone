@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Easing,
   FlatList,
   Modal,
@@ -58,6 +59,10 @@ const SORT_OPTIONS: { value: SortOption; labelKey: string }[] = [
 ];
 
 export default function CategorySearchScreen() {
+  const initialSheetOffset = Math.min(
+    Math.round(Dimensions.get("window").height * 0.55),
+    420,
+  );
   const { id: mainCategoryId } = useLocalSearchParams<{
     id: string;
     title: string;
@@ -95,7 +100,9 @@ export default function CategorySearchScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [filterModalMounted, setFilterModalMounted] = useState(false);
   const filterBackdropOpacity = React.useRef(new Animated.Value(0)).current;
-  const filterSheetTranslateY = React.useRef(new Animated.Value(36)).current;
+  const filterSheetTranslateY = React.useRef(
+    new Animated.Value(initialSheetOffset),
+  ).current;
 
   const activeFilterCount =
     (sortBy !== "none" ? 1 : 0) + (selectedCondition ? 1 : 0);
@@ -245,22 +252,26 @@ export default function CategorySearchScreen() {
 
   useEffect(() => {
     if (filterModalVisible) {
+      filterBackdropOpacity.setValue(0);
+      filterSheetTranslateY.setValue(initialSheetOffset);
       setFilterModalMounted(true);
-      Animated.parallel([
-        Animated.timing(filterBackdropOpacity, {
-          toValue: 1,
-          duration: 140,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(filterSheetTranslateY, {
-          toValue: 0,
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-      return;
+      const frame = requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(filterBackdropOpacity, {
+            toValue: 1,
+            duration: 180,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(filterSheetTranslateY, {
+            toValue: 0,
+            duration: 280,
+            easing: Easing.bezier(0.22, 1, 0.36, 1),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+      return () => cancelAnimationFrame(frame);
     }
 
     Animated.parallel([
@@ -271,8 +282,8 @@ export default function CategorySearchScreen() {
         useNativeDriver: true,
       }),
       Animated.timing(filterSheetTranslateY, {
-        toValue: 28,
-        duration: 160,
+        toValue: initialSheetOffset,
+        duration: 190,
         easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }),
@@ -281,7 +292,12 @@ export default function CategorySearchScreen() {
         setFilterModalMounted(false);
       }
     });
-  }, [filterBackdropOpacity, filterModalVisible, filterSheetTranslateY]);
+  }, [
+    filterBackdropOpacity,
+    filterModalVisible,
+    filterSheetTranslateY,
+    initialSheetOffset,
+  ]);
 
   const getLocationLabel = useCallback(() => {
     if (!selectedProvince && !selectedDistrict && !selectedCommune) {

@@ -13,6 +13,7 @@ Notifications.setNotificationHandler({
 
     return {
       shouldShowBanner: true,  // Show iOS banner
+      shouldShowList: true,
       shouldPlaySound: true,   // Play sound
       shouldSetBadge: true,    // Set badge count
     };

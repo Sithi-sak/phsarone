@@ -27,7 +27,12 @@ export async function normalizeImageForUpload(
       compress,
       format: ImageManipulator.SaveFormat.JPEG,
     });
-    return result.localUri;
+    const normalizedUri =
+      (result as { localUri?: string; uri?: string }).localUri ?? result.uri;
+    if (!normalizedUri) {
+      throw new Error("Image normalization did not return a file URI.");
+    }
+    return normalizedUri;
   }
 
   const resizedRef = imageRef.resize(
@@ -38,5 +43,10 @@ export async function normalizeImageForUpload(
     compress,
     format: ImageManipulator.SaveFormat.JPEG,
   });
-  return result.localUri;
+  const normalizedUri =
+    (result as { localUri?: string; uri?: string }).localUri ?? result.uri;
+  if (!normalizedUri) {
+    throw new Error("Image normalization did not return a file URI.");
+  }
+  return normalizedUri;
 }

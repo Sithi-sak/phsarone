@@ -9,6 +9,7 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeftIcon,
@@ -34,6 +35,7 @@ import {
   Animated,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -54,7 +56,6 @@ import { Colors } from "@src/constants/Colors";
 import { Message, useChat } from "@src/hooks/useChat";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { normalizeImageForUpload } from "@src/utils/imageUpload";
-import { getOptimizedStorageImageUrl } from "@src/utils/storageImage";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDuration(sec: number) {
   const m = Math.floor(sec / 60)
@@ -76,6 +77,59 @@ function parseContent(raw: any): { type: string; [k: string]: any } {
     return { type: "text", text: raw };
   }
   return typeof raw === "object" ? raw : { type: "text", text: String(raw) };
+}
+
+async function getBestTrackedLocation(): Promise<Location.LocationObject> {
+  const seed = await Location.getCurrentPositionAsync({
+    accuracy:
+      Platform.OS === "android"
+        ? Location.Accuracy.Highest
+        : Location.Accuracy.High,
+  });
+
+  return await new Promise((resolve) => {
+    let best = seed;
+    let settled = false;
+    let sub: Location.LocationSubscription | null = null;
+
+    const finish = (loc: Location.LocationObject) => {
+      if (settled) return;
+      settled = true;
+      sub?.remove();
+      resolve(loc);
+    };
+
+    const timer = setTimeout(() => finish(best), 5000);
+
+    Location.watchPositionAsync(
+      {
+        accuracy:
+          Platform.OS === "android"
+            ? Location.Accuracy.Highest
+            : Location.Accuracy.High,
+        timeInterval: 1000,
+        distanceInterval: 1,
+      },
+      (update) => {
+        const bestAcc = best.coords.accuracy ?? Number.POSITIVE_INFINITY;
+        const nextAcc = update.coords.accuracy ?? Number.POSITIVE_INFINITY;
+        if (nextAcc < bestAcc) {
+          best = update;
+        }
+        if (nextAcc <= 25) {
+          clearTimeout(timer);
+          finish(best);
+        }
+      },
+    )
+      .then((watcher) => {
+        sub = watcher;
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        finish(best);
+      });
+  });
 }
 
 // ─── Voice Player ─────────────────────────────────────────────────────────────
@@ -173,7 +227,12 @@ function Bubble({
   onLongPress: () => void;
 }) {
   const content = parseContent(item.content);
-  const bubbleBg = isMe ? Colors.reds[500] : themeColors.card;
+  const bubbleBg =
+    content.type === "image"
+      ? "transparent"
+      : isMe
+        ? Colors.reds[500]
+        : themeColors.card;
   const textColor = isMe ? "#fff" : themeColors.text;
   const { t } = useTranslation();
   const inner = () => {
@@ -181,7 +240,7 @@ function Bubble({
       case "image":
         return (
           <Image
-            source={{ uri: getOptimizedStorageImageUrl(content.url, "chat") }}
+            source={{ uri: content.url }}
             style={styles.imgMsg}
             resizeMode="cover"
           />
@@ -245,7 +304,7 @@ function Bubble({
                   {
                     backgroundColor: isMe
                       ? "rgba(255,255,255,0.18)"
-                      : Colors.reds[50],
+                      : Colors.reds[100],
                   },
                 ]}
               >
@@ -405,6 +464,7 @@ export default function TradeProductChatScreen() {
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 250);
   const isRecording = recorderState.isRecording;
@@ -478,6 +538,27 @@ export default function TradeProductChatScreen() {
       scrollToLatest();
     }
   }, [conversation?.id, loading, scrollToLatest]);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      const delay = Platform.OS === "ios" ? 50 : 0;
+      setTimeout(() => scrollToLatest(), delay);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [scrollToLatest]);
 
   useEffect(() => {
     if (isRecording) {
@@ -592,6 +673,68 @@ export default function TradeProductChatScreen() {
     }
   };
 
+  const handleSendLocation = async () => {
+    setShowAttachMenu(false);
+    if (isSending) return;
+
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    if (!servicesEnabled) {
+      Alert.alert(t("error"), t("chat.location_services_off"));
+      return;
+    }
+
+    const existingPermission = await Location.getForegroundPermissionsAsync();
+    const { status } = existingPermission.granted
+      ? existingPermission
+      : await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(t("error"), t("chat.permission_location"));
+      return;
+    }
+
+    if (Platform.OS === "android") {
+      try {
+        await Location.enableNetworkProviderAsync();
+      } catch {
+        // User may dismiss Android high-accuracy prompt.
+      }
+    }
+
+    setIsSending(true);
+    try {
+      const loc = await getBestTrackedLocation();
+      const accuracy = loc.coords.accuracy ?? Number.POSITIVE_INFINITY;
+      if (accuracy > 400) {
+        Alert.alert(t("error"), t("chat.location_accuracy_low"));
+        return;
+      }
+
+      let label: string | undefined;
+      try {
+        const [geo] = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+        label = geo
+          ? [geo.street, geo.city, geo.country].filter(Boolean).join(", ")
+          : undefined;
+      } catch {
+        label = undefined;
+      }
+
+      await sendMessage({
+        type: "location",
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        label,
+      });
+    } catch (e: any) {
+      Alert.alert(t("error"), e.message || t("chat.get_location_failed"));
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   // ── Voice ──────────────────────────────────────────────────────────────────
   const startRecording = async () => {
     if (recorderState.isRecording) return;
@@ -680,7 +823,7 @@ export default function TradeProductChatScreen() {
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: themeColors.background }}
-      edges={["top", "left", "right"]}
+      edges={["top", "left", "right", "bottom"]}
     >
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -743,9 +886,10 @@ export default function TradeProductChatScreen() {
       </View>
       {/* ── Messages ── */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        enabled={Platform.OS === "ios"}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        keyboardVerticalOffset={0}
       >
         <FlatList
           ref={flatListRef}
@@ -817,22 +961,45 @@ export default function TradeProductChatScreen() {
         ) : null}
 
         {showAttachMenu && !isRecording ? (
-          <View style={styles.attachTray}>
+          <View
+            style={[
+              styles.attachMenu,
+              {
+                backgroundColor: themeColors.card,
+                borderTopColor: themeColors.border + "30",
+                paddingBottom:
+                  Platform.OS === "ios"
+                    ? insets.bottom > 0
+                      ? insets.bottom + 4
+                      : 18
+                    : 12,
+              },
+            ]}
+          >
             <TouchableOpacity
-              style={[
-                styles.attachPill,
-                {
-                  backgroundColor: themeColors.card,
-                  borderColor: themeColors.border,
-                },
-              ]}
+              style={styles.attachItem}
               onPress={handlePickImage}
             >
-              <ImageIcon size={16} color={Colors.reds[500]} weight="fill" />
+              <View style={[styles.attachIcon, { backgroundColor: "#6366F1" }]}>
+                <ImageIcon size={22} color="#fff" weight="fill" />
+              </View>
               <ThemedText
-                style={[styles.attachPillText, { color: themeColors.text }]}
+                style={[styles.attachLabel, { color: themeColors.text }]}
               >
                 {t("chat.photo")}
+              </ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.attachItem}
+              onPress={handleSendLocation}
+            >
+              <View style={[styles.attachIcon, { backgroundColor: "#10B981" }]}>
+                <MapPinIcon size={22} color="#fff" weight="fill" />
+              </View>
+              <ThemedText
+                style={[styles.attachLabel, { color: themeColors.text }]}
+              >
+                {t("chat.location")}
               </ThemedText>
             </TouchableOpacity>
           </View>
@@ -843,6 +1010,7 @@ export default function TradeProductChatScreen() {
             styles.composerRow,
             {
               backgroundColor: themeColors.background,
+              marginBottom: Platform.OS === "android" ? keyboardHeight : 0,
               paddingBottom: composerBottomPadding,
             },
           ]}
@@ -1181,23 +1349,27 @@ const styles = StyleSheet.create({
     width: 24,
   },
 
-  attachTray: {
+  attachMenu: {
+    borderTopWidth: 1,
     flexDirection: "row",
-    marginBottom: 8,
-    paddingHorizontal: 14,
+    gap: 32,
+    paddingHorizontal: 24,
+    paddingTop: 18,
   },
-  attachPill: {
+  attachItem: {
     alignItems: "center",
-    borderRadius: 999,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 8,
   },
-  attachPillText: {
-    fontSize: 13,
-    fontWeight: "600",
+  attachIcon: {
+    alignItems: "center",
+    borderRadius: 26,
+    height: 52,
+    justifyContent: "center",
+    width: 52,
+  },
+  attachLabel: {
+    fontSize: 12,
+    fontWeight: "500",
   },
 
   composerRow: {

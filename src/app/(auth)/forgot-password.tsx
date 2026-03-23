@@ -32,7 +32,6 @@ export default function ForgotPasswordPage() {
   );
   const [error, setError] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
-  const [codeVerified, setCodeVerified] = React.useState(false);
   const [showCodeSentModal, setShowCodeSentModal] = React.useState(false);
   const [showResetSuccessModal, setShowResetSuccessModal] = React.useState(false);
 
@@ -258,7 +257,7 @@ export default function ForgotPasswordPage() {
             <>
               <Text style={styles.title}>Reset Password</Text>
               <Text style={styles.subtitle}>
-                Enter your email and we'll send you a reset code.
+                Enter your email and we&apos;ll send you a reset code.
               </Text>
 
               <View style={styles.formContainer}>
@@ -349,7 +348,7 @@ export default function ForgotPasswordPage() {
                   }}
                 >
                   <Text style={[styles.footerLink, styles.centeredLink]}>
-                    Didn't receive a code? Resend
+                    Didn&apos;t receive a code? Resend
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -438,7 +437,7 @@ export default function ForgotPasswordPage() {
       </KeyboardAvoidingView>
 
       <Text style={styles.terms}>
-        By continuing, you agree to PhsarOne's Terms{"\n"}of Service and Privacy
+        By continuing, you agree to PhsarOne&apos;s Terms{"\n"}of Service and Privacy
         Policy.
       </Text>
     </SafeAreaView>

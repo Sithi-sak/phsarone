@@ -1,5 +1,4 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { Colors } from "@src/constants/Colors";
 import { useTradeProducts } from "@src/context/TradeProductsContext";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { getAuthToken } from "@src/lib/auth";
@@ -154,7 +153,7 @@ export default function TradeOfferBottomSheet({
       const { error: messageError } = await authSupabase.from("messages").insert({
         conversations_id: conversationId,
         sender_id: userId,
-        content: {
+        content: JSON.stringify({
           type: "trade_offer",
           offeredItemId: selectedItemId,
           offeredItemTitle: selectedItem?.title || "Trade Item",
@@ -166,7 +165,7 @@ export default function TradeOfferBottomSheet({
           targetTradeId,
           targetTradeTitle: targetTrade?.title || "",
           message: `Trade offer sent: ${selectedItem?.title || "Trade Item"}`,
-        },
+        }),
       });
 
       if (messageError) throw messageError;
@@ -276,7 +275,7 @@ export default function TradeOfferBottomSheet({
                         selectedItemId === item.id
                           ? themeColors.primary
                           : "transparent",
-                      borderWidth: 2,
+                      borderWidth: 1,
                     },
                   ]}
                   onPress={() => setSelectedItemId(item.id)}
@@ -311,7 +310,7 @@ export default function TradeOfferBottomSheet({
                       styles.submitBtn,
                       {
                         backgroundColor: selectedItemId
-                          ? Colors.blues[500]
+                          ? themeColors.primary
                           : "#E5E7EB",
                         opacity: sendingOffer ? 0.7 : 1,
                       },
@@ -387,7 +386,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   itemName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
     flex: 1,
   },
@@ -417,13 +416,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   submitBtn: {
-    height: 54,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: 99,
     justifyContent: "center",
     alignItems: "center",
   },
   submitBtnText: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 14,
   },
 });

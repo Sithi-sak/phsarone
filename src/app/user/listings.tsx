@@ -22,9 +22,7 @@ import {
   CaretLeftIcon,
   ChatTeardropTextIcon,
   EyeIcon,
-  PauseIcon,
-  PencilSimpleIcon,
-  RocketLaunchIcon,
+  RocketLaunchIcon
 } from "phosphor-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -475,7 +473,6 @@ export default function MyListingsScreen() {
           style={styles.actionButton}
           onPress={() => router.push(`/sell/details?editId=${item.id}`)}
         >
-          <PencilSimpleIcon size={18} color={themeColors.text} />
           <ThemedText style={styles.actionButtonText}>
             {t("listings_screen.edit")}
           </ThemedText>
@@ -485,14 +482,6 @@ export default function MyListingsScreen() {
           onPress={() => handleBoost(item)}
           disabled={boostingProductId === item.id}
         >
-          <RocketLaunchIcon
-            size={18}
-            color={
-              boostingProductId === item.id
-                ? themeColors.tabIconDefault
-                : themeColors.text
-            }
-          />
           <ThemedText
             style={[
               styles.actionButtonText,
@@ -510,7 +499,6 @@ export default function MyListingsScreen() {
           style={styles.actionButton}
           onPress={() => handleUpdateStatus(item.id, "sold")}
         >
-          <PauseIcon size={18} color={themeColors.text} />
           <ThemedText style={styles.actionButtonText}>
             {t("listings_screen.pause")}
           </ThemedText>
@@ -844,6 +832,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f0f0",
   },
   details: {
+    marginLeft: 8,
     flex: 1,
     justifyContent: "space-between",
   },
@@ -926,13 +915,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.1)",
   },
   actionButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
   },
   actionButtonTextDisabled: {

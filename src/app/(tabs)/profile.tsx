@@ -209,10 +209,7 @@ export default function ProfileScreen() {
         onConfirm={() => {
           const recommendedPlan = upgradePrompt.recommendedPlan;
           setUpgradePrompt((current) => ({ ...current, visible: false }));
-          router.push({
-            pathname: "/subscription" as Href,
-            params: { plan: recommendedPlan },
-          });
+          router.push(`/subscription?plan=${recommendedPlan}` as Href);
         }}
       />
       <ScrollView
@@ -423,6 +420,7 @@ export default function ProfileScreen() {
             <GridItem
               icon={<StorefrontIcon size={24} color={themeColors.text} />}
               label={t("user_actions.following")}
+              compact
               onPress={() =>
                 userId &&
                 router.push({
@@ -436,21 +434,25 @@ export default function ProfileScreen() {
                 <ClockCounterClockwiseIcon size={24} color={themeColors.text} />
               }
               label={t("user_actions.history")}
+              compact
               onPress={() => router.push("/user/history" as Href)}
             />
             <GridItem
               icon={<BookmarkSimpleIcon size={24} color={themeColors.text} />}
               label={t("user_actions.bookMark")}
+              compact
               onPress={() => router.push("/user/bookmarks" as Href)}
             />
             <GridItem
               icon={<CardholderIcon size={24} color={themeColors.text} />}
               label={t("subscription_screen.subscriptions")}
+              compact
               onPress={() => router.push("/settings/subscription" as Href)}
             />
             <GridItem
               icon={<HeadsetIcon size={24} color={themeColors.text} />}
               label={t("user_actions.helpCenter")}
+              compact
               onPress={() => router.push("/settings/help-feedback" as Href)}
             />
           </View>
@@ -482,15 +484,25 @@ function GridItem({
   icon,
   label,
   onPress,
+  compact = false,
 }: {
   icon: React.ReactNode;
   label: string;
   onPress?: () => void;
+  compact?: boolean;
 }) {
   return (
-    <TouchableOpacity style={styles.gridItem} onPress={onPress}>
+    <TouchableOpacity
+      style={[styles.gridItem, compact && styles.compactGridItem]}
+      onPress={onPress}
+    >
       {icon}
-      <ThemedText style={styles.gridLabel}>{label}</ThemedText>
+      <ThemedText
+        style={[styles.gridLabel, compact && styles.compactGridLabel]}
+        numberOfLines={2}
+      >
+        {label}
+      </ThemedText>
     </TouchableOpacity>
   );
 }
@@ -616,9 +628,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
+  compactGridItem: {
+    flexShrink: 1,
+    minWidth: 0,
+    paddingHorizontal: 2,
+  },
   gridLabel: {
     fontSize: 12,
     marginTop: 8,
+    textAlign: "center",
+  },
+  compactGridLabel: {
+    fontSize: 10,
+    lineHeight: 12,
+    marginTop: 6,
   },
   footerGrid: {
     marginHorizontal: 16,
@@ -629,4 +652,3 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
 });
-

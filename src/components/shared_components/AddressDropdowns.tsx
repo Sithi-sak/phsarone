@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
     marginTop: 12,
     marginBottom: 8,
@@ -262,12 +262,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 99,
     height: 44,
     paddingHorizontal: 16,
   },
   triggerText: {
-    fontSize: 16,
+    fontSize: 14,
   },
   modalContainer: {
     flex: 1,

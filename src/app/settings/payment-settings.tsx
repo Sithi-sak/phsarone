@@ -5,8 +5,8 @@ import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from "react-nat
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@src/components/shared_components/ThemedText";
-import useThemeColor from "@src/hooks/useThemeColor";
 import { useCurrentSubscription } from "@src/hooks/useCurrentSubscription";
+import useThemeColor from "@src/hooks/useThemeColor";
 import { useTranslation } from "react-i18next";
 
 function Row({
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   },
   iconWrap: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 99,
     height: 40,
     justifyContent: "center",
     width: 40,
@@ -150,12 +150,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
     marginBottom: 4,
   },
   infoCopy: {
-    fontSize: 14,
+    fontSize: 12,
     lineHeight: 20,
   },
   separator: {
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   rowLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
   },
   rowValue: {
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   secondaryCopy: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 19,
   },
 });

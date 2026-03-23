@@ -70,7 +70,7 @@ export default function PricingCard({
 
       <View style={styles.heroPanel}>
         <View style={styles.iconBox}>
-          <SparkleIcon size={18} color="#111827" weight="bold" />
+          <SparkleIcon size={20} color="#111827" weight="regular" />
         </View>
 
         <ThemedText style={styles.planTitle}>{selectedPlan.name}</ThemedText>
@@ -100,7 +100,7 @@ export default function PricingCard({
               <ThemedText style={styles.ctaButtonText}>
                 {t("subscription_screen.continue_with_plan")}
               </ThemedText>
-              <ArrowRightIcon size={18} color="#111827" weight="bold" />
+              <ArrowRightIcon size={18} color="#111827" weight="regular" />
             </>
           )}
         </TouchableOpacity>
@@ -126,22 +126,20 @@ export default function PricingCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 28,
+    borderRadius: 16,
     borderCurve: "continuous",
     borderWidth: 1,
     borderColor: "#E5E7EB",
     backgroundColor: "#FAFAFA",
-    padding: 14,
+    padding: 16,
     marginHorizontal: 16,
-    marginTop: 14,
   },
   segmentWrap: {
     flexDirection: "row",
     backgroundColor: "#F3F4F6",
     borderRadius: 999,
-    borderWidth: 1,
+    padding: 2,
     borderColor: "#E5E7EB",
-    padding: 3,
     marginBottom: 12,
   },
   segmentItem: {
@@ -152,7 +150,6 @@ const styles = StyleSheet.create({
   },
   segmentItemSelected: {
     backgroundColor: "#FFFFFF",
-    borderWidth: 1,
     borderColor: "#D1D5DB",
   },
   segmentText: {
@@ -162,13 +159,11 @@ const styles = StyleSheet.create({
   },
   segmentTextSelected: {
     color: "#111827",
-    fontWeight: "700",
   },
   heroPanel: {
-    borderRadius: 22,
+    borderRadius: 16,
     borderCurve: "continuous",
     backgroundColor: "#F3F4F6",
-    borderWidth: 1,
     borderColor: "#E5E7EB",
     paddingHorizontal: 16,
     paddingVertical: 18,
@@ -176,55 +171,52 @@ const styles = StyleSheet.create({
   iconBox: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 99,
     borderColor: "#E5E7EB",
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 6,
   },
   planTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "700",
     color: "#0F172A",
     letterSpacing: -0.6,
   },
   planDescription: {
     marginTop: 8,
-    fontSize: 15,
+    fontSize: 14,
     color: "#475569",
-    lineHeight: 21,
   },
   priceRow: {
-    marginTop: 18,
+    marginTop: 8,
     flexDirection: "row",
     alignItems: "flex-end",
   },
   currencySymbol: {
-    fontSize: 34,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: "500",
     color: "#0F172A",
-    lineHeight: 40,
+    lineHeight: 48,
     marginRight: 2,
   },
   priceValue: {
-    fontSize: 50,
+    fontSize: 32,
     fontWeight: "700",
     color: "#0F172A",
-    lineHeight: 56,
     letterSpacing: -1,
   },
   monthInline: {
     fontSize: 20,
     fontWeight: "500",
     color: "#475569",
-    marginBottom: 8,
+    marginBottom: 6,
     marginLeft: 4,
   },
   ctaButton: {
-    marginTop: 18,
-    minHeight: 50,
+    marginTop: 12,
+    minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "#D1D5DB",
@@ -238,7 +230,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   ctaButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
     color: "#111827",
   },
@@ -246,15 +238,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingTop: 16,
     paddingBottom: 6,
-    gap: 10,
+    gap: 8,
   },
   featureRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   featureText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#111827",
     lineHeight: 24,
     fontWeight: "500",

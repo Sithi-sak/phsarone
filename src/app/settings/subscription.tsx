@@ -1,15 +1,23 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { getAuthToken } from "@src/lib/auth";
 import { ThemedText } from "@src/components/shared_components/ThemedText";
-import useThemeColor from "@src/hooks/useThemeColor";
 import { useCurrentSubscription } from "@src/hooks/useCurrentSubscription";
+import useThemeColor from "@src/hooks/useThemeColor";
+import { getAuthToken } from "@src/lib/auth";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { Href, Stack, useFocusEffect, useRouter } from "expo-router";
-import { ActivityIndicator, Alert, StyleSheet, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { CaretLeftIcon } from "phosphor-react-native";
 import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type PlanId = "starter" | "pro" | "business";
 
@@ -49,6 +57,8 @@ export default function SubscriptionSettingsScreen() {
   const { subscription, entitlements, loading, refresh } =
     useCurrentSubscription();
   const [isCanceling, setIsCanceling] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,60 +96,101 @@ export default function SubscriptionSettingsScreen() {
     return (
       !!subscription &&
       !isCanceling &&
+      !isResuming &&
       currentPlanId !== "regular" &&
       String(subscription.status || "").toLowerCase() !== "canceled" &&
       !!subscription.current_period_end &&
       new Date(subscription.current_period_end).getTime() > Date.now()
     );
-  }, [currentPlanId, isCanceling, subscription]);
+  }, [currentPlanId, isCanceling, isResuming, subscription]);
+
+  const canResume = useMemo(() => {
+    return (
+      !!subscription &&
+      !isCanceling &&
+      !isResuming &&
+      currentPlanId !== "regular" &&
+      String(subscription.status || "").toLowerCase() === "canceled" &&
+      !!subscription.current_period_end &&
+      new Date(subscription.current_period_end).getTime() > Date.now()
+    );
+  }, [currentPlanId, isCanceling, isResuming, subscription]);
 
   const cancelSubscription = useCallback(() => {
     if (!subscription?.id || isCanceling) return;
+    setShowCancelConfirm(true);
+  }, [isCanceling, subscription?.id]);
 
-    Alert.alert(
-      t("subscription_settings.cancel_title"),
-      t("subscription_settings.cancel_description"),
-      [
-        { text: t("subscription_settings.keep_plan"), style: "cancel" },
-        {
-          text: t("subscription_settings.cancel_subscription"),
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setIsCanceling(true);
-              const token = await getAuthToken(
-                getToken,
-                "subscription cancellation",
-              );
-              const authSupabase = createClerkSupabaseClient(token);
-              const { error } = await authSupabase
-                .from("subscriptions")
-                .update({ status: "canceled" })
-                .eq("id", subscription.id);
+  const confirmCancelSubscription = useCallback(async () => {
+    if (!subscription?.id || isCanceling) return;
 
-              if (error) throw error;
+    try {
+      setShowCancelConfirm(false);
+      setIsCanceling(true);
+      const token = await getAuthToken(
+        getToken,
+        "subscription cancellation",
+      );
+      const authSupabase = createClerkSupabaseClient(token);
+      const { error } = await authSupabase
+        .from("subscriptions")
+        .update({ status: "canceled" })
+        .eq("id", subscription.id);
 
-              await refresh();
-              Alert.alert(
-                t("subscription_settings.canceled_title"),
-                t("subscription_settings.canceled_description"),
-              );
-            } catch (cancelError) {
-              console.error("Error canceling subscription:", cancelError);
-              Alert.alert(
-                t("subscription_settings.cancellation_failed"),
-                cancelError instanceof Error
-                  ? cancelError.message
-                  : t("subscription_settings.unable_to_cancel"),
-              );
-            } finally {
-              setIsCanceling(false);
-            }
-          },
-        },
-      ],
-    );
+      if (error) throw error;
+
+      await refresh();
+      Alert.alert(
+        t("subscription_settings.canceled_title"),
+        t("subscription_settings.canceled_description"),
+      );
+    } catch (cancelError) {
+      console.error("Error canceling subscription:", cancelError);
+      Alert.alert(
+        t("subscription_settings.cancellation_failed"),
+        cancelError instanceof Error
+          ? cancelError.message
+          : t("subscription_settings.unable_to_cancel"),
+      );
+    } finally {
+      setIsCanceling(false);
+    }
   }, [getToken, isCanceling, refresh, subscription?.id, t]);
+
+  const resumeSubscription = useCallback(async () => {
+    if (!subscription?.id || isResuming) return;
+
+    try {
+      setIsResuming(true);
+      const token = await getAuthToken(
+        getToken,
+        "subscription resume",
+      );
+      const authSupabase = createClerkSupabaseClient(token);
+      const { error } = await authSupabase
+        .from("subscriptions")
+        .update({ status: "active" })
+        .eq("id", subscription.id);
+
+      if (error) throw error;
+
+      await refresh();
+      Alert.alert(
+        t("subscription_settings.title"),
+        t("subscription_settings.manage_plan"),
+      );
+    } catch (resumeError) {
+      console.error("Error resuming subscription:", resumeError);
+      Alert.alert(
+        t("error"),
+        resumeError instanceof Error
+          ? resumeError.message
+          : t("subscription_settings.unable_to_cancel"),
+      );
+    } finally {
+      setIsResuming(false);
+    }
+  }, [getToken, isResuming, refresh, subscription?.id, t]);
 
   const Row = ({ label, value }: { label: string; value: string }) => (
     <View style={styles.row}>
@@ -151,6 +202,56 @@ export default function SubscriptionSettingsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }} edges={["top"]}>
       <Stack.Screen options={{ headerShown: false }} />
+      <Modal
+        visible={showCancelConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCancelConfirm(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setShowCancelConfirm(false)}
+        >
+          <Pressable
+            style={[styles.modalCard, { backgroundColor: themeColors.card }]}
+            onPress={() => {}}
+          >
+            <ThemedText style={styles.modalTitle}>
+              {t("subscription_settings.cancel_title")}
+            </ThemedText>
+            <ThemedText style={styles.modalDescription}>
+              {t("subscription_settings.cancel_description")}
+            </ThemedText>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalSecondaryButton,
+                  { borderColor: themeColors.border },
+                ]}
+                onPress={() => setShowCancelConfirm(false)}
+                activeOpacity={0.85}
+              >
+                <ThemedText style={styles.modalSecondaryButtonText}>
+                  {t("subscription_settings.keep_plan")}
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalPrimaryButton,
+                  { backgroundColor: themeColors.tint },
+                ]}
+                onPress={confirmCancelSubscription}
+                activeOpacity={0.85}
+              >
+                <ThemedText style={styles.modalPrimaryButtonText}>
+                  {t("subscription_settings.cancel_subscription")}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <View style={[styles.header, { backgroundColor: themeColors.background }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -205,15 +306,25 @@ export default function SubscriptionSettingsScreen() {
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: themeColors.primary }]}
           onPress={() =>
-            router.push({
-              pathname: "/subscription" as Href,
-              params: { plan: recommendedPlan },
-            })
+            router.push(`/subscription?plan=${recommendedPlan}` as Href)
           }
           activeOpacity={0.8}
         >
           <ThemedText style={styles.actionButtonText}>{ctaLabel}</ThemedText>
         </TouchableOpacity>
+
+        {canResume ? (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={resumeSubscription}
+            activeOpacity={0.8}
+            disabled={isResuming}
+          >
+            <ThemedText style={styles.secondaryButtonText}>
+              {isResuming ? "Resuming..." : "Resume subscription"}
+            </ThemedText>
+          </TouchableOpacity>
+        ) : null}
 
         {canCancel ? (
           <TouchableOpacity
@@ -311,12 +422,62 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 999,
     justifyContent: "center",
-    minHeight: 52,
+    minHeight: 44,
   },
   actionButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
+  },
+  modalBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    width: "100%",
+  },
+  modalTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+  },
+  modalDescription: {
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 10,
+    opacity: 0.72,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+  },
+  modalSecondaryButton: {
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 46,
+  },
+  modalSecondaryButtonText: {
+    fontSize: 12,
+  },
+  modalPrimaryButton: {
+    alignItems: "center",
+    borderRadius: 999,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 46,
+  },
+  modalPrimaryButtonText: {
+    color: "#fff",
+    fontSize: 12,
   },
   secondaryButton: {
     alignItems: "center",
@@ -324,11 +485,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     justifyContent: "center",
-    minHeight: 52,
+    minHeight: 44,
   },
   secondaryButtonText: {
     color: "#991B1B",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
   },
 });

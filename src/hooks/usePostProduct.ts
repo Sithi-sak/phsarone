@@ -352,11 +352,11 @@ export function usePostProduct() {
 
       const metadata = (data.metadata as Record<string, any> | null) ?? {};
       const subCategory = metadata.subCategory || "";
-      const detailFields =
+      const detailFields: Array<{ key: string }> =
         (subCategory && POST_FIELDS_MAP[subCategory]) || [];
-      const detailKeys = new Set(detailFields.map((field) => field.key));
+      const detailKeys = new Set<string>(detailFields.map((field) => field.key));
       const details = Object.fromEntries(
-        Array.from(detailKeys).map((key) => {
+        Array.from(detailKeys).map((key: string) => {
           if (key === "location") {
             return [key, metadata.locationText || ""];
           }

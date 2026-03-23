@@ -38,12 +38,7 @@ export default function AnalyticsLockedCard({
       </ThemedText>
       <TouchableOpacity
         style={[styles.button, { backgroundColor: themeColors.tint }]}
-        onPress={() =>
-          router.push({
-            pathname: "/subscription" as Href,
-            params: { plan: requiredPlan },
-          })
-        }
+        onPress={() => router.push(`/subscription?plan=${requiredPlan}` as Href)}
         activeOpacity={0.85}
       >
         <ThemedText

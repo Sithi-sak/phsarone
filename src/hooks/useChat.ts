@@ -167,7 +167,7 @@ export function useConversations(type: "regular" | "trade", productId?: string |
           console.warn('Conversation summaries fetch warning:', formatErrorMessage(summaryError));
         } else {
           summaryByConversationId = new Map(
-            ((summaries as ConversationSummaryRow[] | null) || []).map((summary) => [
+            (((summaries as unknown) as ConversationSummaryRow[] | null) || []).map((summary) => [
               summary.id,
               summary,
             ]),
@@ -482,20 +482,26 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
         const { data, error: convError } = await authSupabase
           .from('conversations')
           .select('*, buyer:users!conversations_buyer_id_fkey(*), seller:users!conversations_seller_id_fkey(*), product:products(id, title, images, metadata), trade:trades(*)')
-          .eq('id', initialConversationId).single();
+          .eq('id', initialConversationId)
+          .maybeSingle();
         if (convError) throw convError;
-        currentConversation = data as Conversation;
-        if (
-          currentConversation?.buyer_id &&
-          currentConversation.buyer_id === currentConversation.seller_id
-        ) {
-          setConversation(null);
-          setMessages([]);
-          setError("Invalid conversation.");
-          return;
+
+        if (data) {
+          currentConversation = data as Conversation;
+          if (
+            currentConversation?.buyer_id &&
+            currentConversation.buyer_id === currentConversation.seller_id
+          ) {
+            setConversation(null);
+            setMessages([]);
+            setError("Invalid conversation.");
+            return;
+          }
         }
 
-      } else if (productId && sellerId) {
+      }
+
+      if (!currentConversation && productId && sellerId) {
         if (sellerId === userId) {
           setConversation(null);
           setMessages([]);
@@ -521,7 +527,7 @@ export function useChat({ productId, sellerId, tradeId, conversationId: initialC
           currentConversation = newConvData as Conversation;
         }
 
-      } else if (tradeId && sellerId) {
+      } else if (!currentConversation && tradeId && sellerId) {
         if (sellerId === userId) {
           setConversation(null);
           setMessages([]);

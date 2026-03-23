@@ -1,6 +1,6 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import AddressDropdowns from "@src/components/shared_components/AddressDropdowns";
 import ActionStatusModal from "@src/components/shared_components/ActionStatusModal";
+import AddressDropdowns from "@src/components/shared_components/AddressDropdowns";
 import DynamicPhosphorIcon from "@src/components/shared_components/DynamicPhosphorIcon";
 import LocationPickerMap from "@src/components/shared_components/LocationPickerMap";
 import PhotoUploadSection from "@src/components/shared_components/PhotoUploadSection";
@@ -13,6 +13,7 @@ import { useTradeDraft } from "@src/context/TradeDraftContext";
 import { useTradeProducts } from "@src/context/TradeProductsContext";
 import useThemeColor from "@src/hooks/useThemeColor";
 import { getAuthToken } from "@src/lib/auth";
+import { createNotification } from "@src/lib/notificationCenter";
 import { createClerkSupabaseClient } from "@src/lib/supabase";
 import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system/legacy";
@@ -49,6 +50,12 @@ export default function AddTradeProductScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successDescription, setSuccessDescription] = useState("");
+  const [successRedirect, setSuccessRedirect] = useState<{
+    conversationId: string;
+    sellerAvatar: string;
+    sellerName: string;
+    tradeId: string;
+  } | null>(null);
   const isEditMode = !!editId;
   const editPrefilledRef = useRef(false);
   const editProduct = isEditMode ? getProductById(editId as string) : undefined;
@@ -328,6 +335,7 @@ export default function AddTradeProductScreen() {
       };
 
       let createdTradeId: string | null = null;
+      let privateConversationId: string | null = null;
 
       if (isEditMode && editId) {
         const { error } = await authSupabase
@@ -358,7 +366,8 @@ export default function AddTradeProductScreen() {
       }
 
       // If we are creating a private offer for a specific trade, create the offer too
-      if (!isEditMode && isPrivatePost && tradeId && createdTradeId) {
+      if (!isEditMode && isPrivatePost && tradeId && createdTradeId && targetUserId) {
+        const targetSellerId = targetUserId;
         const { error: offerError } = await authSupabase
           .from("trade_offers")
           .insert({
@@ -371,7 +380,75 @@ export default function AddTradeProductScreen() {
 
         if (offerError) {
           console.error("Error creating trade offer:", offerError);
-          // Don't throw, we successfully created the trade post at least
+        } else {
+          const { data: existingConversation, error: findConversationError } =
+            await authSupabase
+              .from("conversations")
+              .select("id")
+              .eq("trade_id", tradeId)
+              .eq("seller_id", targetSellerId)
+              .eq("buyer_id", userId)
+              .maybeSingle();
+
+          if (findConversationError) throw findConversationError;
+
+          privateConversationId = existingConversation?.id || null;
+
+          if (!privateConversationId) {
+            const { data: newConversation, error: createConversationError } =
+              await authSupabase
+                .from("conversations")
+                .insert({
+                  trade_id: tradeId,
+                  seller_id: targetSellerId,
+                  buyer_id: userId,
+                })
+                .select("id")
+                .single();
+
+            if (createConversationError) throw createConversationError;
+            privateConversationId = newConversation?.id || null;
+          }
+
+          if (!privateConversationId) {
+            throw new Error("Failed to create trade conversation.");
+          }
+
+          const offeredItemPrice = originalPrice
+            ? `$${parseFloat(originalPrice)}`
+            : undefined;
+
+          const { error: messageError } = await authSupabase
+            .from("messages")
+            .insert({
+              conversations_id: privateConversationId,
+              sender_id: userId,
+              content: JSON.stringify({
+                type: "trade_offer",
+                offeredItemId: createdTradeId,
+                offeredItemTitle: title.trim(),
+                offeredItemImage: uploadedImages[0] || "",
+                offeredItemPrice,
+                targetTradeId: tradeId,
+                targetTradeTitle: "",
+                message: `Trade offer sent: ${title.trim()}`,
+              }),
+            });
+
+          if (messageError) throw messageError;
+
+          await createNotification(authSupabase, {
+            userId: targetSellerId,
+            type: "trade_offer",
+            title: "New trade offer",
+            body: `${title.trim()} was offered for your trade listing.`,
+            data: {
+              conversationId: privateConversationId,
+              chatType: "trade",
+              tradeId,
+              sellerId: targetSellerId,
+            },
+          });
         }
       }
 
@@ -384,6 +461,16 @@ export default function AddTradeProductScreen() {
             })
           : t("trade.alerts.post_success"),
       );
+      if (!isEditMode && isPrivatePost && tradeId && privateConversationId) {
+        setSuccessRedirect({
+          conversationId: privateConversationId,
+          sellerAvatar: "",
+          sellerName: "",
+          tradeId,
+        });
+      } else {
+        setSuccessRedirect(null);
+      }
       setShowSuccessModal(true);
     } catch (error) {
       console.error("Error posting trade product:", error);
@@ -467,9 +554,9 @@ export default function AddTradeProductScreen() {
             {/* Condition */}
             <View style={styles.condition_sec}>
               <ThemedText
-                style={[{ fontSize: 14, fontWeight: "500", marginBottom: 8 }]}
+                style={[{ fontSize: 14, fontWeight: "600", marginBottom: 8 }]}
               >
-                {t("trade.condition")} *
+                {t("trade.condition")}*
               </ThemedText>
               <ConditionSelector
                 condition={condition}
@@ -545,8 +632,9 @@ export default function AddTradeProductScreen() {
                     value={estimatedMinValue}
                     onChangeText={setEstimatedMinValue}
                     keyboardType="numeric"
+                    maxLength={6}
                     inputStyle={styles.valueInput}
-                    containerStyle={{ marginBottom: 0 }}
+                    containerStyle={styles.valueInputGroup}
                   />
                 </View>
               </View>
@@ -572,8 +660,9 @@ export default function AddTradeProductScreen() {
                     value={estimatedMaxValue}
                     onChangeText={setEstimatedMaxValue}
                     keyboardType="numeric"
+                    maxLength={6}
                     inputStyle={styles.valueInput}
-                    containerStyle={{ marginBottom: 0 }}
+                    containerStyle={styles.valueInputGroup}
                   />
                 </View>
               </View>
@@ -644,7 +733,7 @@ export default function AddTradeProductScreen() {
                     keyboardType="phone-pad"
                     placeholder={t("trade.phone_number_placeholder")}
                     inputStyle={styles.phoneInput}
-                    containerStyle={{ marginBottom: 0, flex: 1 }}
+                    containerStyle={{ flex: 1 }}
                   />
                   {phoneNumbers.length > 1 && (
                     <TouchableOpacity
@@ -710,6 +799,19 @@ export default function AddTradeProductScreen() {
         onClose={() => {
           setShowSuccessModal(false);
           resetDraft();
+          if (successRedirect) {
+            router.replace({
+              pathname: "/chat/trade/[id]",
+              params: {
+                id: successRedirect.tradeId,
+                conversationId: successRedirect.conversationId,
+                sellerId: targetUserId ? String(targetUserId) : undefined,
+                sellerName: successRedirect.sellerName,
+                sellerAvatar: successRedirect.sellerAvatar,
+              },
+            });
+            return;
+          }
           router.back();
         }}
       />
@@ -736,7 +838,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
   },
   headerSpacer: {
@@ -754,10 +856,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   condition_sec: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "600",
     marginBottom: 8,
   },
@@ -786,12 +888,18 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
+    borderRadius: 99,
+    height: 44,
+    fontSize: 14
   },
   addPhoneIconBtn: {
     marginLeft: 10,
+    marginBottom: 14
   },
   removeBtn: {
     marginLeft: 10,
+    marginBottom: 14
+
   },
   divider: {
     height: 1,
@@ -806,6 +914,13 @@ const styles = StyleSheet.create({
   currencyInputContainer: {
     flexDirection: "row",
     alignItems: "center",
+    position: "relative",
+    width: "100%",
+  },
+  valueInputGroup: {
+    marginBottom: 0,
+    flex: 1,
+    width: "100%",
   },
   currencySymbol: {
     position: "absolute",
@@ -815,13 +930,15 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   valueInput: {
-    paddingLeft: 108,
+    width: "95%",
+    paddingLeft: 30,
+    paddingRight: 12,
   },
   rangeSeparator: {
     paddingBottom: 12,
   },
   rangeSeparatorText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "600",
   },
   estimatedRangeDisplay: {
@@ -837,7 +954,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   estimatedRangeValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
   },
 });
