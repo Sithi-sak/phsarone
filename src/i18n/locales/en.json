@@ -49,12 +49,6 @@
   "category": {
     "no_products": "No Products Found"
   },
-  "common": {
-    "coming_soon": "Coming soon",
-    "ok": "OK",
-    "dismiss": "Dismiss",
-    "continue": "Continue"
-  },
   "subcategories": {
     "Phone": "Phone",
     "Tablet": "Tablet",
@@ -517,7 +511,11 @@
     "condition_new": "New",
     "condition_like_new": "Like New",
     "condition_used": "Used",
-    "condition_refurbished": "Refurbished"
+    "condition_refurbished": "Refurbished",
+    "coming_soon": "Coming soon",
+    "ok": "OK",
+    "dismiss": "Dismiss",
+    "continue": "Continue"
   },
   "chat": {
     "normal_product_chat": "Product Chat",
